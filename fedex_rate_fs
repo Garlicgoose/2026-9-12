@@ -1,0 +1,196 @@
+import re
+from pathlib import Path
+
+import pandas as pd
+import pdfplumber
+
+
+AD_KEYWORDS = (
+    "Billing and Invoicing",
+    "Service News",
+    "Service Guide",
+    "Key Updates",
+)
+
+
+def _is_ad_page(text):
+    """判断页面是否为 FedEx 发票末尾广告页。"""
+    normalized = text or ""
+    return sum(keyword.lower() in normalized.lower() for keyword in AD_KEYWORDS) >= 2
+
+
+def _extract_values_from_text(text):
+    """从单页文字中提取汇率、燃油附加费比例和计费重量。"""
+    rate_value = None
+    surcharge_value = None
+    weight_value = None
+
+    # 兼容旧格式：對換率 7.8123
+    # 兼容新格式：Conversion Rate:CNY-HKD 對換率 1.163767826
+    rate_patterns = [
+        r"(?:對換率|兑换率)\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)",
+        r"Conversion\s*Rate[^\d\n]*([0-9]+(?:\.[0-9]+)?)",
+    ]
+    for pattern in rate_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            rate_value = match.group(1)
+            break
+
+    # 兼容旧格式：徵收 18.50%
+    # 兼容新格式：43.50 % fuel surcharge / 徵收43.50% 燃料附加費
+    surcharge_patterns = [
+        r"(?:徵收|征收)\s*([0-9]+(?:\.[0-9]+)?)\s*%",
+        r"([0-9]+(?:\.[0-9]+)?)\s*%\s*(?:fuel\s*surcharge|燃料附加費|燃油附加费)",
+    ]
+    for pattern in surcharge_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            surcharge_value = f"{match.group(1)}%"
+            break
+
+    # 优先提取发票明细中的总重量，例如：Weight重量 4.2 kg
+    weight_patterns = [
+        r"(?:Weight\s*重量|重量\s*Weight)\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)\s*kg",
+        r"\bWeight\b\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)\s*kg",
+        r"([0-9]+(?:\.[0-9]+)?)\s*kg",
+    ]
+    for pattern in weight_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            weight_value = match.group(1)
+            break
+
+    return rate_value, surcharge_value, weight_value
+
+
+def extract_rate_fs_weight_from_pdf(pdf_path):
+    """
+    从单个 FedEx PDF 中提取：
+    1. 汇率
+    2. 燃油附加费比例 F.S%
+    3. 计费重量 weight
+
+    读取顺序：
+    - 优先读取第 2 页；
+    - 第 2 页没有目标数据时，再读取第 3 页；
+    - PDF 最后一页如果是广告页，不参与提取；
+    - 旧发票仍保留原来的第 2 页提取逻辑。
+    """
+    pdf_path = Path(pdf_path)
+    rate_value = 1
+    surcharge_value = 0
+    weight_value = 0
+    remark_parts = []
+
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            page_count = len(pdf.pages)
+            if page_count == 0:
+                return rate_value, surcharge_value, weight_value, "PDF无页面"
+
+            # 第2页优先；如果不足2页，兼容读取第1页。
+            candidate_indexes = [1] if page_count >= 2 else [0]
+
+            # 只有存在第3页且第3页不是物理最后一页时，才将其作为后备。
+            # 这样可避免把末页广告当作发票明细。
+            if page_count >= 4:
+                candidate_indexes.append(2)
+
+            extracted = (None, None, None)
+            readable_page_found = False
+
+            for page_index in candidate_indexes:
+                text = pdf.pages[page_index].extract_text() or ""
+                if not text.strip():
+                    continue
+                if _is_ad_page(text):
+                    continue
+
+                readable_page_found = True
+                values = _extract_values_from_text(text)
+
+                # 只要该页发现任一目标字段，就使用该页，避免跨页面误拼数据。
+                if any(value is not None for value in values):
+                    extracted = values
+                    break
+
+            if not readable_page_found:
+                return rate_value, surcharge_value, weight_value, "第2页/第3页未提取到有效文字"
+
+            found_rate, found_surcharge, found_weight = extracted
+
+            if found_rate is not None:
+                rate_value = found_rate
+            else:
+                remark_parts.append("未找到汇率")
+
+            if found_surcharge is not None:
+                surcharge_value = found_surcharge
+            else:
+                remark_parts.append("未找到F.S%")
+
+            if found_weight is not None:
+                weight_value = found_weight
+            else:
+                remark_parts.append("未找到weight")
+
+    except Exception as e:
+        return rate_value, surcharge_value, weight_value, f"处理失败: {e}"
+
+    return rate_value, surcharge_value, weight_value, "; ".join(remark_parts)
+
+
+def process_fedex_rate_fs(input_dir, output_file=None, progress_callback=None):
+    """批量处理文件夹下所有 PDF，输出 Excel。"""
+    input_dir = Path(input_dir)
+
+    if not input_dir.exists():
+        raise FileNotFoundError(f"输入文件夹不存在: {input_dir}")
+    if not input_dir.is_dir():
+        raise NotADirectoryError(f"输入路径不是文件夹: {input_dir}")
+
+    pdf_files = sorted(
+        p for p in input_dir.iterdir()
+        if p.is_file() and p.suffix.lower() == ".pdf"
+    )
+    if not pdf_files:
+        raise FileNotFoundError("该文件夹下没有找到 PDF 文件")
+
+    out_path = Path(output_file) if output_file else input_dir / "Data for rate&FS.xlsx"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    data_lists = []
+    total = len(pdf_files)
+
+    for index, pdf_file in enumerate(pdf_files, start=1):
+        rate_value, surcharge_value, weight_value, remark = (
+            extract_rate_fs_weight_from_pdf(pdf_file)
+        )
+        data_lists.append({
+            "PDF文件名": pdf_file.stem,
+            "汇率": rate_value,
+            "F.S%": surcharge_value,
+            "weight": weight_value,
+            "备注": remark,
+        })
+
+        if progress_callback:
+            progress_callback(int(index / total * 100))
+
+    df = pd.DataFrame(data_lists)
+    for col in ["汇率", "weight"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    df.to_excel(out_path, index=False)
+
+    success_count = sum(1 for row in data_lists if not row["备注"])
+    warning_count = total - success_count
+    summary = (
+        f"提取完成！\n"
+        f"PDF总数：{total}\n"
+        f"正常提取：{success_count}\n"
+        f"有备注/异常：{warning_count}\n"
+        f"输出文件：{out_path}"
+    )
+    return out_path, summary
