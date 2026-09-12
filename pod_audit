@@ -1,0 +1,468 @@
+# -*- coding: utf-8 -*-
+"""
+POD 审查模块
+
+功能：
+1. 保留非 FedEx 已下载 POD 的随机 5% 抽查。
+2. 对所有已送达且有 POD 记录的 FedEx 运单进行签名检查。
+3. 如果 FedEx POD 明确显示没有签名，或无法识别签名，则主动调用
+   fedex_module.query_fedex_one() 重新下载 SPOD。
+4. 重新下载后再次检查，并将下载前后结果写入审查工作簿。
+
+FedEx API 环境变量：
+- FEDEX_API_KEY
+- FEDEX_API_SECRET
+- FEDEX_ACCOUNT_NUMBER，默认 791310059
+
+注意：
+- 本文件会优先导入同目录下的 fedex_module.py。
+- 建议使用已经加入 accountNumber、carrierCode、trackingNumberUniqueId 的
+  fedex_module.py。
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+import math
+import os
+from pathlib import Path
+import random
+import re
+from typing import Callable, Iterable, Optional
+
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+from pypdf import PdfReader
+
+
+DELIVERED_TERMS = (
+    "delivered",
+    "completed",
+    "proof of delivery",
+    "delivery confirmation",
+)
+
+FEDEX_NO_SIGNATURE_TERMS = (
+    "no signature is currently available",
+    "signature is not currently available",
+    "no signature available",
+    "signature not available",
+    "please check again later for a signature",
+)
+
+FEDEX_SIGNATURE_TEXT_TERMS = (
+    "signed by",
+    "signature proof of delivery",
+    "signature",
+)
+
+
+@dataclass(frozen=True)
+class PodAuditItem:
+    tracking_number: str
+    carrier: str
+    pdf_file: str
+    sample_reason: str
+    tracking_status: str
+    valid_pdf: bool
+    tracking_found: bool
+    delivered_found: bool
+    status_field: str
+    signature_found: bool
+    download_attempted: bool
+    download_succeeded: bool
+    result: str
+    details: str
+
+
+def _normalize_search_text(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value or "").casefold())
+
+
+def _is_fedex(carrier: str) -> bool:
+    normalized = re.sub(r"[^a-z0-9]", "", str(carrier or "").casefold())
+    return normalized in {"fedex", "fdxe", "fdxg", "federalexpress"} or normalized.startswith("fedex")
+
+
+def _is_delivered_result(result: dict) -> bool:
+    status = str(result.get("状态") or result.get("status") or "").strip().casefold()
+    delivered_value = result.get("is_delivered")
+    delivered_text = str(delivered_value or "").strip().casefold()
+    return (
+        delivered_value is True
+        or delivered_text in {"y", "yes", "true", "1"}
+        or status in {"delivered", "completed"}
+    )
+
+
+def _page_has_images(page) -> bool:
+    """检查 PDF 页面资源中是否包含图片对象。"""
+    try:
+        resources = page.get("/Resources") or {}
+        xobjects = resources.get("/XObject") or {}
+        xobjects = xobjects.get_object() if hasattr(xobjects, "get_object") else xobjects
+        for obj in xobjects.values():
+            resolved = obj.get_object() if hasattr(obj, "get_object") else obj
+            if resolved.get("/Subtype") == "/Image":
+                return True
+            # 某些签名图片包含在 Form XObject 中。
+            if resolved.get("/Subtype") == "/Form":
+                nested = resolved.get("/Resources") or {}
+                nested_x = nested.get("/XObject") or {}
+                nested_x = nested_x.get_object() if hasattr(nested_x, "get_object") else nested_x
+                for nested_obj in nested_x.values():
+                    nested_resolved = (
+                        nested_obj.get_object()
+                        if hasattr(nested_obj, "get_object")
+                        else nested_obj
+                    )
+                    if nested_resolved.get("/Subtype") == "/Image":
+                        return True
+    except Exception:  # noqa: BLE001
+        return False
+    return False
+
+
+def inspect_pod(pdf_file, tracking_number, carrier="") -> PodAuditItem:
+    path = Path(pdf_file)
+    valid_pdf = False
+    tracking_found = False
+    delivered_found = False
+    status_field = ""
+    signature_found = False
+    details = ""
+
+    try:
+        reader = PdfReader(str(path))
+        valid_pdf = len(reader.pages) > 0
+        page_text = []
+        has_images = False
+
+        for page in reader.pages[:5]:
+            page_text.append(page.extract_text() or "")
+            has_images = has_images or _page_has_images(page)
+
+        text = "\n".join(page_text)
+        folded = text.casefold()
+        normalized = _normalize_search_text(text)
+
+        candidates = {
+            _normalize_search_text(tracking_number),
+            _normalize_search_text(path.stem),
+        }
+        candidates.discard("")
+        tracking_found = any(candidate in normalized for candidate in candidates)
+
+        for line in text.splitlines():
+            if any(term in line.casefold() for term in DELIVERED_TERMS):
+                status_field = " ".join(line.split())[:300]
+                break
+
+        delivered_found = bool(status_field) or any(
+            term in folded for term in DELIVERED_TERMS
+        )
+        if delivered_found and not status_field:
+            status_field = next(
+                (term for term in DELIVERED_TERMS if term in folded), ""
+            )
+
+        no_signature = any(term in folded for term in FEDEX_NO_SIGNATURE_TERMS)
+        signature_text = any(term in folded for term in FEDEX_SIGNATURE_TEXT_TERMS)
+
+        if _is_fedex(carrier):
+            # FedEx 的无签名模板带有明确提示，该提示优先级最高。
+            # 有签名的 SPOD 通常包含签名图片/XObject；同时保留文字判断。
+            signature_found = not no_signature and (has_images or signature_text)
+        else:
+            # 非 FedEx 不强制签名，仅保留检测信息，不影响原抽查通过逻辑。
+            signature_found = has_images or signature_text
+
+        detail_parts = []
+        if not text.strip():
+            detail_parts.append("PDF没有可提取文本，需要人工查看或OCR")
+        if not tracking_found:
+            detail_parts.append("未找到输入运单号或POD文件名中的主单号")
+        if not delivered_found:
+            detail_parts.append("未找到Delivered/Completed等送达字段")
+        if _is_fedex(carrier):
+            if no_signature:
+                detail_parts.append("FedEx POD明确显示当前无签名")
+            elif not signature_found:
+                detail_parts.append("未能识别FedEx签名文字或签名图片")
+            else:
+                detail_parts.append("已识别FedEx签名")
+        details = "；".join(detail_parts)
+
+    except Exception as exc:  # noqa: BLE001
+        details = f"PDF读取失败：{exc}"
+
+    if _is_fedex(carrier):
+        if valid_pdf and tracking_found and delivered_found and signature_found:
+            result = "通过"
+        elif valid_pdf:
+            result = "需重新下载" if not signature_found else "人工复核"
+        else:
+            result = "失败"
+    else:
+        # 保留原有其他承运商判定逻辑。
+        if valid_pdf and tracking_found and delivered_found:
+            result = "通过"
+        elif valid_pdf:
+            result = "人工复核"
+        else:
+            result = "失败"
+
+    return PodAuditItem(
+        tracking_number=str(tracking_number),
+        carrier=str(carrier),
+        pdf_file=str(path),
+        sample_reason="",
+        tracking_status="",
+        valid_pdf=valid_pdf,
+        tracking_found=tracking_found,
+        delivered_found=delivered_found,
+        status_field=status_field,
+        signature_found=signature_found,
+        download_attempted=False,
+        download_succeeded=False,
+        result=result,
+        details=details,
+    )
+
+
+def choose_pod_samples(
+    results: Iterable[dict],
+    sample_rate: float = 0.05,
+    rng: Optional[random.Random] = None,
+) -> list[tuple[dict, str]]:
+    """
+    FedEx：所有已送达记录均检查，POD 文件不存在时也保留以触发下载。
+    其他承运商：保留原来的随机 5% 抽查。
+    """
+    fedex_items: list[dict] = []
+    other_eligible: list[dict] = []
+
+    for result in results:
+        pdf_file = str(result.get("POD文件") or result.get("pdf_file") or "").strip()
+        carrier = str(result.get("快递公司") or result.get("carrier") or "").strip()
+        if not _is_delivered_result(result):
+            continue
+
+        if _is_fedex(carrier):
+            fedex_items.append(result)
+        elif pdf_file and Path(pdf_file).is_file():
+            other_eligible.append(result)
+
+    sampled: list[tuple[dict, str]] = [
+        (item, "FedEx签名检查") for item in fedex_items
+    ]
+
+    if other_eligible:
+        random_count = min(
+            math.ceil(len(other_eligible) * sample_rate),
+            len(other_eligible),
+        )
+        generator = rng or random.SystemRandom()
+        sampled.extend(
+            (item, "非FedEx随机抽查5%")
+            for item in generator.sample(other_eligible, random_count)
+        )
+
+    return sampled
+
+
+def _download_fedex_spod(result: dict, current_pdf: str) -> tuple[str, str]:
+    """调用 fedex_module 的公开入口重新下载 SPOD。"""
+    try:
+        import fedex_module
+    except Exception as exc:  # noqa: BLE001
+        return "", f"无法导入fedex_module：{exc}"
+
+    tracking_number = str(
+        result.get("运单号") or result.get("tracking_number") or ""
+    ).strip()
+    if not tracking_number:
+        return "", "FedEx重新下载失败：运单号为空"
+
+    api_key = str(
+        result.get("fedex_api_key") or os.getenv("FEDEX_API_KEY", "")
+    ).strip()
+    api_secret = str(
+        result.get("fedex_api_secret") or os.getenv("FEDEX_API_SECRET", "")
+    ).strip()
+    if not api_key or not api_secret:
+        return "", "FedEx重新下载失败：未设置FEDEX_API_KEY/FEDEX_API_SECRET"
+
+    pdf_dir_value = result.get("POD目录") or result.get("pdf_dir")
+    if pdf_dir_value:
+        pdf_dir = Path(str(pdf_dir_value))
+    elif current_pdf:
+        pdf_dir = Path(current_pdf).parent
+    else:
+        pdf_dir = getattr(fedex_module, "DEFAULT_PDF_DIR", Path.cwd() / "pdf" / "FedEx")
+
+    # 审查发现无签名时必须覆盖旧文件。若旧文件被打开，fedex_module 会改存时间戳文件。
+    previous_overwrite = getattr(fedex_module, "OVERWRITE_EXISTING_POD", None)
+    try:
+        if previous_overwrite is not None:
+            fedex_module.OVERWRITE_EXISTING_POD = True
+        download_result = fedex_module.query_fedex_one(
+            tracking_number=tracking_number,
+            api_key=api_key,
+            api_secret=api_secret,
+            save_pdf=True,
+            pdf_dir=pdf_dir,
+            use_cache=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return "", f"FedEx重新下载异常：{exc}"
+    finally:
+        if previous_overwrite is not None:
+            fedex_module.OVERWRITE_EXISTING_POD = previous_overwrite
+
+    downloaded = str(download_result.get("pdf_file") or "").strip()
+    if downloaded and Path(downloaded).is_file():
+        return downloaded, ""
+
+    error = str(download_result.get("error") or "").strip()
+    flag = str(download_result.get("flag") or "").strip()
+    message = "；".join(part for part in (error, flag) if part)
+    return "", message or "FedEx接口未返回POD文件"
+
+
+def _save_audit_workbook(items: list[PodAuditItem], output_file: Path) -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "POD抽查"
+    sheet.sheet_view.showGridLines = False
+
+    headers = (
+        "运单号", "承运商", "POD文件", "抽查原因", "查询状态", "PDF有效",
+        "运单号匹配", "提取状态", "送达字段匹配", "签名识别",
+        "已尝试下载", "下载成功", "结果", "说明",
+    )
+    sheet.append(headers)
+
+    for item in items:
+        sheet.append((
+            item.tracking_number,
+            item.carrier,
+            item.pdf_file,
+            item.sample_reason,
+            item.tracking_status,
+            "是" if item.valid_pdf else "否",
+            "是" if item.tracking_found else "否",
+            item.status_field,
+            "是" if item.delivered_found else "否",
+            "是" if item.signature_found else "否",
+            "是" if item.download_attempted else "否",
+            "是" if item.download_succeeded else "否",
+            item.result,
+            item.details,
+        ))
+
+    header_fill = PatternFill("solid", fgColor="173F5F")
+    for cell in sheet[1]:
+        cell.fill = header_fill
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    widths = (18, 12, 48, 22, 24, 10, 12, 36, 14, 12, 14, 12, 12, 56)
+    for index, width in enumerate(widths, 1):
+        sheet.column_dimensions[chr(64 + index)].width = width
+
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = sheet.dimensions
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    workbook.save(output_file)
+
+
+def audit_pod_sample(
+    results: Iterable[dict],
+    output_file,
+    inspector: Callable[..., PodAuditItem] = inspect_pod,
+    rng: Optional[random.Random] = None,
+) -> list[PodAuditItem]:
+    sampled = choose_pod_samples(results, rng=rng)
+    items: list[PodAuditItem] = []
+
+    for result, reason in sampled:
+        tracking_number = str(
+            result.get("运单号") or result.get("tracking_number") or ""
+        ).strip()
+        carrier = str(
+            result.get("快递公司") or result.get("carrier") or ""
+        ).strip()
+        tracking_status = str(
+            result.get("状态") or result.get("status") or ""
+        )
+        pdf_file = str(
+            result.get("POD文件") or result.get("pdf_file") or ""
+        ).strip()
+
+        if pdf_file and Path(pdf_file).is_file():
+            checked = inspector(pdf_file, tracking_number, carrier)
+        else:
+            checked = PodAuditItem(
+                tracking_number=tracking_number,
+                carrier=carrier,
+                pdf_file=pdf_file,
+                sample_reason="",
+                tracking_status="",
+                valid_pdf=False,
+                tracking_found=False,
+                delivered_found=False,
+                status_field="",
+                signature_found=False,
+                download_attempted=False,
+                download_succeeded=False,
+                result="需重新下载" if _is_fedex(carrier) else "失败",
+                details="POD文件不存在",
+            )
+
+        checked = replace(
+            checked,
+            sample_reason=reason,
+            tracking_status=tracking_status,
+        )
+
+        # FedEx 已送达但未识别到签名时，主动重新下载并二次审查。
+        if _is_fedex(carrier) and not checked.signature_found:
+            downloaded_file, download_error = _download_fedex_spod(result, pdf_file)
+            if downloaded_file:
+                rechecked = inspector(downloaded_file, tracking_number, carrier)
+                combined_details = "；".join(
+                    part for part in (
+                        checked.details,
+                        "已主动重新下载FedEx SPOD",
+                        rechecked.details,
+                    ) if part
+                )
+                checked = replace(
+                    rechecked,
+                    sample_reason=reason,
+                    tracking_status=tracking_status,
+                    download_attempted=True,
+                    download_succeeded=True,
+                    details=combined_details,
+                )
+            else:
+                combined_details = "；".join(
+                    part for part in (
+                        checked.details,
+                        "已尝试重新下载FedEx SPOD",
+                        download_error,
+                    ) if part
+                )
+                checked = replace(
+                    checked,
+                    download_attempted=True,
+                    download_succeeded=False,
+                    result="下载失败",
+                    details=combined_details,
+                )
+
+        items.append(checked)
+
+    if items:
+        _save_audit_workbook(items, Path(output_file))
+    return items
