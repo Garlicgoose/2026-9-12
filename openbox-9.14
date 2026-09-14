@@ -1,0 +1,553 @@
+# -*- coding: utf-8 -*-
+"""
+HUB仓开箱数据登记
+
+规则：
+1. A列“序号”由脚本自动填写：读取现有最大有效序号后递增。
+2. 重复判断只使用：运输单号 + 箱号 + 操作件数。
+3. 三项完全相同：跳过该行，并将邮件标记为已读。
+4. 运输单号或箱号重复，但操作件数不同：允许新增，保存后将邮件标记为已读。
+5. 只要邮件解析和Excel处理成功，无论是全部重复、部分重复还是全部新增，都标记为已读；异常邮件保持未读。
+
+环境：Windows + 经典 Outlook 桌面版
+依赖：pip install pywin32 beautifulsoup4 openpyxl python-dateutil
+"""
+
+from __future__ import annotations
+
+import html
+import logging
+import re
+import shutil
+import sys
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+try:
+    import pythoncom
+    import win32com.client
+    from bs4 import BeautifulSoup
+    from dateutil import parser as date_parser
+    from openpyxl import load_workbook
+except ImportError as exc:
+    print(f"缺少依赖：{exc}")
+    print("请执行：pip install pywin32 beautifulsoup4 openpyxl python-dateutil")
+    raise SystemExit(1)
+
+# ==================== 配置 ====================
+OUTLOOK_ACCOUNT = "peng.jiang4@molex.com"
+MAIL_FOLDER_PATH = r"收件箱\HUB仓"
+TARGET_SENDER = "macau@winkeybroker.com"
+SUBJECT_KEYWORDS = ("开箱操作", "RMA开箱核对")
+
+EXCEL_PATH = Path(
+    r"C:\Users\pengj8\OneDrive - kochind.com\Desktop\power automate汇总文件\开箱操作\开箱数据.xlsx"
+)
+DATA_SHEET_NAME: Optional[str] = None  # None表示第一个非“异常日志”的工作表
+ERROR_SHEET_NAME = "异常日志"
+LOG_PATH = EXCEL_PATH.with_name("HUB仓开箱数据登记.log")
+BACKUP_DIR = EXCEL_PATH.parent / "backup"
+DRY_RUN = False
+
+# Excel列号
+COL_SEQ = 1
+COL_MAIL_TIME = 2
+COL_SENDER = 3
+COL_INSTRUCTION = 4
+COL_TRACKING = 5
+COL_BOX = 6
+COL_QTY = 7
+COL_REMARK = 8
+COL_MONTH = 9
+COL_DATE = 10
+COL_NUMBER = 11
+COL_WEIGHT = 12
+
+
+@dataclass(frozen=True)
+class OperationRow:
+    tracking_number: str
+    box_number: str
+    operation_qty: int
+
+
+@dataclass
+class MailResult:
+    sender_name: str
+    sender_time: datetime
+    instruction: str
+    rows: list[OperationRow]
+
+
+def setup_logging() -> None:
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(message)s",
+        handlers=[logging.FileHandler(LOG_PATH, encoding="utf-8"), logging.StreamHandler(sys.stdout)],
+    )
+
+
+def clean_text(value) -> str:
+    if value is None:
+        return ""
+    text = html.unescape(str(value)).replace("\xa0", " ")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def norm(value) -> str:
+    return clean_text(value).lower()
+
+
+def header_norm(value) -> str:
+    return re.sub(r"[\s：:（）()/_-]+", "", norm(value))
+
+
+def get_namespace():
+    pythoncom.CoInitialize()
+    outlook = win32com.client.Dispatch("Outlook.Application")
+    return outlook.GetNamespace("MAPI")
+
+
+def find_store_root(namespace):
+    hint = OUTLOOK_ACCOUNT.lower()
+    for i in range(1, namespace.Folders.Count + 1):
+        root = namespace.Folders.Item(i)
+        if hint in clean_text(root.Name).lower():
+            return root
+    return namespace.GetDefaultFolder(6).Parent  # 6 = Inbox
+
+
+def get_mail_folder(namespace):
+    current = find_store_root(namespace)
+    for part in [p for p in re.split(r"[\\/]+", MAIL_FOLDER_PATH) if p]:
+        found = None
+        valid_names = {part.lower()}
+        if part == "收件箱":
+            valid_names |= {"inbox"}
+        for i in range(1, current.Folders.Count + 1):
+            child = current.Folders.Item(i)
+            if clean_text(child.Name).lower() in valid_names:
+                found = child
+                break
+        if found is None:
+            available = [clean_text(current.Folders.Item(i).Name) for i in range(1, current.Folders.Count + 1)]
+            raise RuntimeError(f"找不到Outlook文件夹“{part}”；当前子文件夹：{available}")
+        current = found
+    return current
+
+
+def unread_mails(folder) -> list:
+    items = folder.Items
+    items.Sort("[ReceivedTime]", False)
+    try:
+        items = items.Restrict("[Unread] = True")
+    except Exception:
+        pass
+    result = []
+    for item in items:
+        try:
+            if item.Class == 43 and bool(item.UnRead):
+                result.append(item)
+        except Exception:
+            continue
+    return result
+
+
+def sender_smtp(mail) -> str:
+    try:
+        if clean_text(mail.SenderEmailType).upper() == "EX":
+            exchange_user = mail.Sender.GetExchangeUser()
+            if exchange_user and exchange_user.PrimarySmtpAddress:
+                return norm(exchange_user.PrimarySmtpAddress)
+        return norm(mail.SenderEmailAddress)
+    except Exception:
+        return norm(getattr(mail, "SenderEmailAddress", ""))
+
+
+def is_target(mail) -> bool:
+    subject = clean_text(getattr(mail, "Subject", ""))
+    return sender_smtp(mail) == TARGET_SENDER.lower() and any(k in subject for k in SUBJECT_KEYWORDS)
+
+
+def instruction_from_subject(subject: str) -> str:
+    if "RMA开箱核对" in subject:
+        return "RMA开箱核对"
+    if "开箱操作" in subject:
+        return "开箱核对"
+    raise ValueError("主题不包含支持的作业指令")
+
+
+def plain_body(mail) -> str:
+    raw = str(getattr(mail, "Body", "") or "")
+    if raw:
+        return html.unescape(raw.replace("\r\n", "\n").replace("\r", "\n").replace("\xa0", " "))
+    soup = BeautifulSoup(str(getattr(mail, "HTMLBody", "") or ""), "html.parser")
+    return soup.get_text("\n")
+
+
+def extract_original_sender_and_time(mail) -> tuple[str, datetime]:
+    text = plain_body(mail)
+    patterns = [
+        re.compile(
+            r"发件人\s*[：:]\s*(?P<sender>.*?)\s*(?:\n|发送日期\s*[：:])"
+            r".*?发送日期\s*[：:]\s*(?P<date>[^\n]+)",
+            re.I | re.S,
+        ),
+        re.compile(
+            r"From\s*:\s*(?P<sender>.*?)\s*(?:\n|Sent\s*:)"
+            r".*?Sent\s*:\s*(?P<date>[^\n]+)",
+            re.I | re.S,
+        ),
+    ]
+    match = next((p.search(text) for p in patterns if p.search(text)), None)
+    if not match:
+        raise ValueError("未找到回复正文中的第一组发件人和发送日期")
+
+    sender_name = re.sub(r"<[^>]+>", "", clean_text(match.group("sender")))
+    sender_name = sender_name.replace('"', "").replace("“", "").replace("”", "").strip()
+    sender_name = re.split(r"发送日期\s*[：:]|Sent\s*:", sender_name, maxsplit=1, flags=re.I)[0].strip()
+    if not sender_name:
+        raise ValueError("原邮件发件人为空")
+
+    raw_date = clean_text(match.group("date"))
+    raw_date = re.sub(r"\s*\(UTC[^)]*\)\s*", " ", raw_date, flags=re.I).strip()
+    try:
+        sender_time = date_parser.parse(raw_date, fuzzy=True)
+    except Exception as exc:
+        raise ValueError(f"无法解析原邮件发送日期：{raw_date}") from exc
+    if sender_time.tzinfo is not None:
+        sender_time = sender_time.replace(tzinfo=None)
+    return sender_name, sender_time
+
+
+def locate_headers(table) -> list[str]:
+    for tr in table.find_all("tr")[:5]:
+        cells = [clean_text(c.get_text(" ", strip=True)) for c in tr.find_all(["th", "td"])]
+        joined = "|".join(header_norm(c) for c in cells)
+        if "运单号" in joined and "箱号" in joined and ("开箱件数" in joined or "操作件数" in joined):
+            return cells
+    return []
+
+
+def header_indexes(headers: list[str]) -> tuple[int, int, int]:
+    values = [header_norm(h) for h in headers]
+
+    def find(keys: tuple[str, ...]) -> int:
+        for idx, value in enumerate(values):
+            if any(header_norm(k) in value for k in keys):
+                return idx
+        raise ValueError(f"无法定位表格列：{headers}")
+
+    return (
+        find(("运单号", "运输单号", "trackingnumber")),
+        find(("箱号", "boxnumber")),
+        find(("开箱件数", "操作件数", "件数", "qty")),
+    )
+
+
+def parse_qty(value) -> int:
+    text = clean_text(value).replace(",", "")
+    match = re.search(r"\d+", text)
+    if not match:
+        raise ValueError(f"开箱件数不是整数：{value}")
+    return int(match.group())
+
+
+def parse_html_table(mail) -> list[OperationRow]:
+    soup = BeautifulSoup(str(getattr(mail, "HTMLBody", "") or ""), "html.parser")
+    selected = None
+    headers = None
+    for table in soup.find_all("table"):
+        candidate = locate_headers(table)
+        if candidate:
+            selected, headers = table, candidate
+            break
+    if selected is None or headers is None:
+        return []
+
+    ti, bi, qi = header_indexes(headers)
+    max_index = max(ti, bi, qi)
+    result = []
+    after_header = False
+    for tr in selected.find_all("tr"):
+        cells = [clean_text(c.get_text(" ", strip=True)) for c in tr.find_all(["th", "td"])]
+        if not cells:
+            continue
+        joined = "|".join(header_norm(c) for c in cells)
+        if "运单号" in joined and "箱号" in joined and ("开箱件数" in joined or "操作件数" in joined):
+            after_header = True
+            continue
+        if not after_header or len(cells) <= max_index:
+            continue
+        tracking, box, qty_text = cells[ti], cells[bi], cells[qi]
+        if not tracking and not box and not qty_text:
+            continue
+        if not tracking or not box:
+            raise ValueError(f"表格行缺少运输单号或箱号：{cells}")
+        result.append(OperationRow(clean_text(tracking), clean_text(box), parse_qty(qty_text)))
+    return result
+
+
+def parse_plain_table(mail) -> list[OperationRow]:
+    lines = [x.strip() for x in plain_body(mail).splitlines()]
+    start = next((i for i, x in enumerate(lines) if "运单号" in x and "箱号" in x), None)
+    if start is None:
+        return []
+    result = []
+    for line in lines[start + 1:]:
+        if any(stop in line for stop in ("Jian Feng Mai", "麦健锋", "Warehousing Department")):
+            break
+        parts = [clean_text(p) for p in re.split(r"\t+|\s{2,}", line) if clean_text(p)]
+        if len(parts) < 3:
+            continue
+        if not (parts[0].startswith("#") or re.search(r"\d{6,}", parts[0])):
+            continue
+        result.append(OperationRow(parts[0], parts[1], parse_qty(parts[2])))
+    return result
+
+
+def parse_mail(mail) -> MailResult:
+    subject = clean_text(mail.Subject)
+    sender_name, sender_time = extract_original_sender_and_time(mail)
+    rows = parse_html_table(mail) or parse_plain_table(mail)
+    if not rows:
+        raise ValueError("未找到有效的开箱数据表格")
+    return MailResult(sender_name, sender_time, instruction_from_subject(subject), rows)
+
+
+def duplicate_key(tracking, box, qty) -> tuple[str, str, str]:
+    """只以运单号、箱号、操作件数判断重复。"""
+    return norm(tracking), norm(box), norm(qty)
+
+
+def data_sheet(workbook):
+    if DATA_SHEET_NAME:
+        if DATA_SHEET_NAME not in workbook.sheetnames:
+            raise RuntimeError(f"Excel中不存在工作表：{DATA_SHEET_NAME}")
+        return workbook[DATA_SHEET_NAME]
+    return next((ws for ws in workbook.worksheets if ws.title != ERROR_SHEET_NAME), workbook.active)
+
+
+def load_existing_keys(sheet) -> set[tuple[str, str, str]]:
+    keys = set()
+    for row in range(2, sheet.max_row + 1):
+        tracking = sheet.cell(row, COL_TRACKING).value
+        box = sheet.cell(row, COL_BOX).value
+        qty = sheet.cell(row, COL_QTY).value
+        if tracking not in (None, "") and box not in (None, "") and qty not in (None, ""):
+            keys.add(duplicate_key(tracking, box, qty))
+    return keys
+
+
+def get_next_sequence(sheet) -> int:
+    """自动读取A列最大有效序号并加1；忽略表头、空值、公式错误和非数字。"""
+    maximum = 0
+    for row in range(2, sheet.max_row + 1):
+        value = sheet.cell(row, COL_SEQ).value
+        try:
+            if value not in (None, ""):
+                maximum = max(maximum, int(float(str(value).strip())))
+        except (TypeError, ValueError):
+            continue
+    return maximum + 1
+
+
+def first_empty_business_row(sheet) -> int:
+    """E/F/G三列全空的第一行，即使A列预填内容也可使用。"""
+    for row in range(2, max(sheet.max_row + 2, 3)):
+        if all(sheet.cell(row, col).value in (None, "") for col in (COL_TRACKING, COL_BOX, COL_QTY)):
+            return row
+    return sheet.max_row + 1
+
+
+def append_unique_rows(sheet, result: MailResult, keys: set, sequence: int):
+    inserted = 0
+    duplicates = 0
+    row_index = first_empty_business_row(sheet)
+
+    for item in result.rows:
+        key = duplicate_key(item.tracking_number, item.box_number, item.operation_qty)
+        if key in keys:
+            duplicates += 1
+            logging.warning(
+                "重复跳过：运单号=%s，箱号=%s，操作件数=%s",
+                item.tracking_number, item.box_number, item.operation_qty,
+            )
+            continue
+
+        while not all(sheet.cell(row_index, c).value in (None, "") for c in (COL_TRACKING, COL_BOX, COL_QTY)):
+            row_index += 1
+
+        # A列序号由脚本自动填写
+        sheet.cell(row_index, COL_SEQ, sequence)
+        sheet.cell(row_index, COL_MAIL_TIME, result.sender_time)
+        sheet.cell(row_index, COL_MAIL_TIME).number_format = "yyyy/m/d h:mm"
+        sheet.cell(row_index, COL_SENDER, result.sender_name)
+        sheet.cell(row_index, COL_INSTRUCTION, result.instruction)
+        sheet.cell(row_index, COL_TRACKING, item.tracking_number)
+        sheet.cell(row_index, COL_TRACKING).number_format = "@"
+        sheet.cell(row_index, COL_BOX, item.box_number)
+        sheet.cell(row_index, COL_BOX).number_format = "@"
+        sheet.cell(row_index, COL_QTY, item.operation_qty)
+        sheet.cell(row_index, COL_REMARK, "")
+        sheet.cell(row_index, COL_MONTH, result.sender_time.strftime("%Y-%m"))
+        sheet.cell(row_index, COL_DATE, result.sender_time.date())
+        sheet.cell(row_index, COL_DATE).number_format = "yyyy/m/d"
+        sheet.cell(row_index, COL_NUMBER, "")
+        sheet.cell(row_index, COL_WEIGHT, "")
+
+        keys.add(key)
+        inserted += 1
+        sequence += 1
+        row_index += 1
+
+    return inserted, duplicates, sequence
+
+
+def error_sheet(workbook):
+    if ERROR_SHEET_NAME in workbook.sheetnames:
+        return workbook[ERROR_SHEET_NAME]
+    ws = workbook.create_sheet(ERROR_SHEET_NAME)
+    ws.append(["处理时间", "邮件主题", "邮件接收时间", "当前发件人", "EntryID", "异常原因"])
+    return ws
+
+
+def add_error(workbook, mail, reason: str) -> None:
+    error_sheet(workbook).append([
+        datetime.now(),
+        clean_text(getattr(mail, "Subject", "")),
+        getattr(mail, "ReceivedTime", None),
+        sender_smtp(mail),
+        clean_text(getattr(mail, "EntryID", "")),
+        reason,
+    ])
+
+
+def backup_excel() -> None:
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    shutil.copy2(EXCEL_PATH, BACKUP_DIR / f"{EXCEL_PATH.stem}_{stamp}{EXCEL_PATH.suffix}")
+
+
+def save_safely(workbook) -> None:
+    temp = EXCEL_PATH.with_name(f"{EXCEL_PATH.stem}.__tmp__{EXCEL_PATH.suffix}")
+    workbook.save(temp)
+    check = load_workbook(temp, read_only=True)
+    check.close()
+    temp.replace(EXCEL_PATH)
+
+
+def mark_read(mail) -> None:
+    mail.UnRead = False
+    mail.Save()
+
+
+def main() -> int:
+    setup_logging()
+    logging.info("开始处理HUB仓开箱邮件")
+
+    if not EXCEL_PATH.exists():
+        logging.error("Excel文件不存在：%s", EXCEL_PATH)
+        return 2
+
+    namespace = get_namespace()
+    folder = get_mail_folder(namespace)
+    all_unread = unread_mails(folder)
+    target_mails = [m for m in all_unread if is_target(m)]
+    logging.info("未读邮件%d封，目标邮件%d封", len(all_unread), len(target_mails))
+    if not target_mails:
+        print("没有符合条件的未读邮件。")
+        return 0
+
+    try:
+        backup_excel()
+        workbook = load_workbook(EXCEL_PATH)
+    except PermissionError:
+        logging.error("Excel文件被占用，请关闭Excel后重试：%s", EXCEL_PATH)
+        return 3
+    except Exception as exc:
+        logging.exception("Excel打开失败：%s", exc)
+        return 3
+
+    sheet = data_sheet(workbook)
+    keys = load_existing_keys(sheet)
+    sequence = get_next_sequence(sheet)
+    total_inserted = total_duplicates = total_errors = 0
+
+    for mail in target_mails:
+        subject = clean_text(getattr(mail, "Subject", ""))
+        try:
+            result = parse_mail(mail)
+            inserted, duplicates, sequence = append_unique_rows(sheet, result, keys, sequence)
+
+            if DRY_RUN:
+                logging.info("[DRY RUN] %s：新增%d，重复%d", subject, inserted, duplicates)
+                continue
+
+            save_safely(workbook)
+
+            # 邮件只要解析和Excel处理成功，就标记为已读：
+            # 1) 三项完全相同：跳过重复行，邮件标记已读；
+            # 2) 不完全相同：添加新行，邮件标记已读；
+            # 3) 同一邮件既有重复行又有新增行：仅添加新行，邮件标记已读。
+            mark_read(mail)
+            if inserted > 0 and duplicates > 0:
+                status = "部分重复，新增有效行后已标记已读"
+            elif inserted > 0:
+                status = "新增完成，已标记已读"
+            elif duplicates > 0:
+                status = "全部重复，已跳过并标记已读"
+            else:
+                status = "无可写入数据，已标记已读"
+
+            total_inserted += inserted
+            total_duplicates += duplicates
+            logging.info("%s：新增%d，重复%d，%s", subject, inserted, duplicates, status)
+
+            workbook.close()
+            workbook = load_workbook(EXCEL_PATH)
+            sheet = data_sheet(workbook)
+            keys = load_existing_keys(sheet)
+            sequence = get_next_sequence(sheet)
+
+        except Exception as exc:
+            total_errors += 1
+            reason = f"{type(exc).__name__}: {exc}"
+            logging.exception("处理失败，邮件保持未读：%s | %s", subject, reason)
+            try:
+                add_error(workbook, mail, reason)
+                if not DRY_RUN:
+                    save_safely(workbook)
+                    workbook.close()
+                    workbook = load_workbook(EXCEL_PATH)
+                    sheet = data_sheet(workbook)
+                    keys = load_existing_keys(sheet)
+                    sequence = get_next_sequence(sheet)
+            except Exception:
+                logging.exception("异常日志写入失败")
+
+    workbook.close()
+    logging.info(
+        "完成：目标%d封，新增%d行，重复%d行，异常%d封",
+        len(target_mails), total_inserted, total_duplicates, total_errors,
+    )
+    print("\n处理完成")
+    print(f"目标邮件：{len(target_mails)}")
+    print(f"新增数据：{total_inserted}")
+    print(f"重复跳过：{total_duplicates}")
+    print(f"异常邮件：{total_errors}")
+    print(f"日志文件：{LOG_PATH}")
+    return 0 if total_errors == 0 else 1
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    finally:
+        try:
+            pythoncom.CoUninitialize()
+        except Exception:
+            pass
