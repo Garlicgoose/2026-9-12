@@ -1,0 +1,951 @@
+# -*- coding: utf-8 -*-
+"""从 Excel 读取 FedEx 运单号，调用真实 Edge/Chrome 保存查询主页及详情页 PDF。
+
+本版本要点：
+1. 首票查询后，后续运单改用页面顶部“Track International”下拉框内的
+   二次查询框，不必每次都重新进入 FedEx 首页。
+2. 记录本次运行最后关闭的浏览器；下次运行若未显式指定 --browser，
+   会自动切换成另一个浏览器，避免同一浏览器被连续使用导致更快触发限制。
+3. 查询期间浏览器窗口保持最大化，避免因窗口过窄导致顶部菜单被折叠进
+   汉堡菜单、找不到“Track International”下拉框。
+"""
+from __future__ import annotations
+
+import argparse
+import base64
+import json
+import os
+import random
+import re
+import socket
+import subprocess
+import sys
+import time
+from collections import deque
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable, Optional
+from urllib.error import URLError
+from urllib.request import urlopen
+
+
+TRACKING_PAGE = "https://www.fedex.com/en-cn/tracking.html"
+TRACKING_RE = re.compile(r"^[A-Za-z0-9]{8,30}$")
+
+DETAIL_BUTTON_RE = re.compile(
+    r"(?:view|see)\s+(?:more\s+|full\s+)?(?:shipment\s+)?details?|"
+    r"shipment\s+details?|detailed\s+results?|travel\s+history|"
+    r"查看(?:更多)?详细信息|查看(?:更多)?详情|货件详情",
+    re.I,
+)
+
+BLOCK_PAGE_RE = re.compile(
+    r"too many requests|access denied|temporarily unavailable|service unavailable|"
+    r"unusual traffic|try again later|captcha|robot|请求过多|访问被拒绝|"
+    r"暂时不可用|稍后重试|验证码|系统(?:错误|繁忙)",
+    re.I,
+)
+
+WEBSITE_FAILURE_RE = re.compile(
+    r"429|503|too many requests|access denied|service unavailable|"
+    r"temporarily unavailable|unusual traffic|try again later|captcha|robot|"
+    r"页面触发限流|保护性暂停|验证码|访问被拒绝|暂时不可用|稍后重试|"
+    r"系统(?:错误|繁忙)|查询输入框未出现|查询按钮未出现|"
+    r"等待 FedEx 查询结果主页超时|无法连接真实|二次查询框未出现|"
+    r"Track(?:ing)? International 菜单未出现|窗口最大化失败",
+    re.I,
+)
+
+
+def is_website_failure(error: str) -> bool:
+    """只识别网站、连接、限流类错误，不把单票无详情等业务错误算入连续失败。"""
+    return bool(error and WEBSITE_FAILURE_RE.search(str(error)))
+
+
+DETAIL_CONTENT_RE = re.compile(
+    r"travel\s+history|shipment\s+facts|shipment\s+details|"
+    r"运输历史记录|物流记录|行程历史|货件详情",
+    re.I,
+)
+
+# 顶部导航“Track International”（部分语言/站点显示为 Tracking）下拉框
+# 中的二次查询控件。
+NAV_TRACKING_MENU_RE = re.compile(
+    r"^track\s*international$|^tracking$|^track$",
+    re.I,
+)
+REQUERY_INPUT_RE = re.compile(
+    r"insert\s+tracking\s+id\s+number|tracking\s*id\s*number|"
+    r"请输入.*追踪号|运单号|追踪号",
+    re.I,
+)
+REQUERY_BUTTON_RE = re.compile(r"^track$|^追踪$|^货件查询$", re.I)
+
+EDGE_PATHS = (
+    Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
+    Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
+)
+CHROME_PATHS = (
+    Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+    Path(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"),
+    Path(os.environ.get("LOCALAPPDATA", "")) / "Google/Chrome/Application/chrome.exe",
+)
+
+
+def get_data_path() -> Path:
+    """独立脚本数据目录，不依赖 units 或 authorization。"""
+    base = os.getenv("LOCALAPPDATA") or str(Path.home())
+    path = Path(base) / "FedExExcelPOD"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+# ---------------------------------------------------------------------------
+# 上次关闭浏览器记录：下次运行若未显式指定 --browser，自动切换到另一个浏览器
+# ---------------------------------------------------------------------------
+STATE_FILE_NAME = "last_browser_state.json"
+
+
+def _state_file() -> Path:
+    return get_data_path() / STATE_FILE_NAME
+
+
+def load_last_browser() -> str:
+    try:
+        data = json.loads(_state_file().read_text(encoding="utf-8"))
+        value = str(data.get("last_browser", "")).strip().lower()
+        return value if value in {"edge", "chrome"} else ""
+    except Exception:
+        return ""
+
+
+def save_last_browser(browser_name: str) -> None:
+    browser_name = str(browser_name or "").strip().lower()
+    if browser_name not in {"edge", "chrome"}:
+        return
+    try:
+        _state_file().write_text(
+            json.dumps(
+                {
+                    "last_browser": browser_name,
+                    "saved_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
+def resolve_browser(requested: str) -> tuple[str, str]:
+    """返回 (实际使用的浏览器, 选择原因说明)。
+
+    requested 为 "edge"/"chrome" 时按用户指定执行；
+    为 "auto"（默认）时读取上次记录，自动切换为另一个浏览器。
+    """
+    requested = str(requested or "auto").strip().lower()
+    if requested in {"edge", "chrome"}:
+        return requested, f"按命令行参数指定使用 {requested}"
+
+    last = load_last_browser()
+    if last == "edge":
+        return "chrome", "上次运行最后使用的是 Edge，本次自动切换为 Chrome"
+    if last == "chrome":
+        return "edge", "上次运行最后使用的是 Chrome，本次自动切换为 Edge"
+    return "edge", "未找到上次运行记录，默认使用 Edge"
+
+
+class FedExWebPodError(RuntimeError):
+    """FedEx page query or PDF rendering failed."""
+
+
+@dataclass(frozen=True)
+class FedExWebPodResult:
+    tracking_number: str
+    ok: bool
+    main_pdf: str = ""
+    detail_pdf: str = ""
+    error: str = ""
+
+
+def normalize_tracking_number(value: Any) -> str:
+    number = re.sub(r"[\s-]+", "", str(value or "").strip())
+    if not TRACKING_RE.fullmatch(number):
+        raise ValueError(f"FedEx 运单号格式不正确：{value!r}")
+    return number
+
+
+def output_paths(output_dir: Path, tracking_number: str) -> tuple[Path, Path]:
+    number = normalize_tracking_number(tracking_number)
+    return output_dir / f"{number}.pdf", output_dir / f"{number}+.pdf"
+
+
+def is_valid_pdf(path: Path) -> bool:
+    try:
+        return (
+            path.is_file()
+            and path.stat().st_size >= 1024
+            and path.read_bytes()[:5] == b"%PDF-"
+        )
+    except OSError:
+        return False
+
+
+def find_browser(browser: str = "edge", explicit_path: str = "") -> str:
+    browser = str(browser or "edge").strip().lower()
+    candidates = []
+    if explicit_path:
+        candidates.append(Path(explicit_path))
+    env_name = "FEDEX_CHROME_PATH" if browser in {"chrome", "google"} else "FEDEX_EDGE_PATH"
+    if os.getenv(env_name):
+        candidates.append(Path(os.environ[env_name]))
+    candidates.extend(CHROME_PATHS if browser in {"chrome", "google"} else EDGE_PATHS)
+    for candidate in candidates:
+        if candidate and candidate.is_file():
+            return str(candidate.resolve())
+    label = "Google Chrome" if browser in {"chrome", "google"} else "Microsoft Edge"
+    raise FileNotFoundError(f"找不到 {label} 浏览器程序。")
+
+
+def find_edge(explicit_path: str = "") -> str:
+    return find_browser("edge", explicit_path)
+
+
+def _free_local_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def _wait_for_cdp(cdp_url: str, timeout_seconds: float = 20) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    last_error: Optional[BaseException] = None
+    while time.monotonic() < deadline:
+        try:
+            with urlopen(f"{cdp_url}/json/version", timeout=1) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            if data.get("webSocketDebuggerUrl"):
+                return
+        except (OSError, ValueError, URLError) as exc:
+            last_error = exc
+        time.sleep(0.25)
+    raise FedExWebPodError(f"无法连接真实浏览器：{last_error}")
+
+
+def _body_text(page) -> str:
+    try:
+        return page.locator("body").inner_text(timeout=10_000)
+    except Exception:
+        return ""
+
+
+def _detail_locator(page):
+    for role in ("button", "link"):
+        locator = page.get_by_role(role, name=DETAIL_BUTTON_RE)
+        if locator.count():
+            return locator
+    return page.get_by_text(DETAIL_BUTTON_RE)
+
+
+def _visible_detail_candidate(page, tracking_number: str = ""):
+    """Prefer the details control inside the card for the requested shipment."""
+    locator = _detail_locator(page)
+    fallback = None
+    for index in range(min(locator.count(), 20)):
+        try:
+            candidate = locator.nth(index)
+            if not candidate.is_visible():
+                continue
+            if fallback is None:
+                fallback = candidate
+            if tracking_number and candidate.evaluate(
+                """(element, number) => {
+                    const wanted = String(number).replace(/[\\s-]+/g, '');
+                    let current = element;
+                    for (let depth = 0; current && depth < 8; depth += 1) {
+                        const text = (current.innerText || '').replace(/[\\s-]+/g, '');
+                        if (text.includes(wanted)) return true;
+                        current = current.parentElement;
+                    }
+                    return false;
+                }""",
+                tracking_number,
+            ):
+                return candidate
+        except Exception:
+            pass
+    return fallback
+
+
+def _main_page_ready(page, tracking_number: str) -> bool:
+    text = _body_text(page)
+    if tracking_number not in re.sub(r"[\s-]+", "", text):
+        return False
+    return _visible_detail_candidate(page, tracking_number) is not None
+
+
+def _dismiss_cookie_banner(page) -> None:
+    pattern = re.compile(
+        r"reject optional cookies|accept all cookies|拒绝可选|仅使用必要|接受全部",
+        re.I,
+    )
+    locator = page.get_by_role("button", name=pattern)
+    for index in range(min(locator.count(), 6)):
+        try:
+            candidate = locator.nth(index)
+            if candidate.is_visible():
+                candidate.click(timeout=2_000)
+                page.wait_for_timeout(500)
+                return
+        except Exception:
+            pass
+
+
+def _hide_print_overlays(page) -> None:
+    """Keep cookie consent and FedEx chat overlays out of archived PDFs."""
+    _dismiss_cookie_banner(page)
+    try:
+        page.add_style_tag(content="""
+            #usercentrics-root,
+            iframe[src*="usercentrics"],
+            iframe[src*="nuance"],
+            [id*="nuance"],
+            [class*="nuance"] {
+                display: none !important;
+                visibility: hidden !important;
+            }
+        """)
+        page.wait_for_timeout(250)
+    except Exception:
+        pass
+
+
+def _maximize_window(context, page) -> None:
+    """把浏览器窗口设为最大化，确保顶部导航显示完整的
+    “Track International”下拉菜单，而不是折叠进汉堡菜单。"""
+    try:
+        cdp = context.new_cdp_session(page)
+        info = cdp.send("Browser.getWindowForTarget")
+        cdp.send(
+            "Browser.setWindowBounds",
+            {"windowId": info["windowId"], "bounds": {"windowState": "maximized"}},
+        )
+        cdp.detach()
+    except Exception as exc:
+        raise FedExWebPodError(f"窗口最大化失败：{exc}") from exc
+
+
+def _submit_tracking_form(page, tracking_number: str, timeout_ms: int) -> None:
+    """首次查询：进入 FedEx 官网查询首页并提交表单。"""
+    page.goto(TRACKING_PAGE, wait_until="domcontentloaded", timeout=timeout_ms)
+    _dismiss_cookie_banner(page)
+    box = page.locator("input[id^='tracking_number_']:visible").first
+    try:
+        box.wait_for(state="visible", timeout=timeout_ms)
+    except Exception:
+        box = page.locator(
+            "input[name*='tracking']:visible, textarea[name*='tracking']:visible"
+        ).first
+        try:
+            box.wait_for(state="visible", timeout=5_000)
+        except Exception as exc:
+            raise FedExWebPodError("FedEx 查询输入框未出现") from exc
+    _dismiss_cookie_banner(page)
+    # 清空输入框后逐字符键入，不拼接结果页 URL。
+    box.click(timeout=5_000)
+    box.press("Control+A")
+    box.press("Backspace")
+    box.type(tracking_number, delay=70)
+    button = page.get_by_role(
+        "button",
+        name=re.compile(r"^(?:货件查询|追踪|track|track shipment)$", re.I),
+    )
+    if not button.count():
+        button = page.locator("button[type='submit']:visible")
+    try:
+        button.first.wait_for(state="visible", timeout=10_000)
+    except Exception as exc:
+        raise FedExWebPodError("FedEx 查询按钮未出现") from exc
+    button.first.click(timeout=10_000)
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=min(timeout_ms, 20_000))
+    except Exception:
+        # FedEx 结果经常由前端异步刷新，不强制要求发生页面跳转。
+        pass
+
+
+def _open_requery_dropdown(page, timeout_ms: int) -> None:
+    """点击顶部导航“Track International”菜单，展开二次查询下拉框。"""
+    nav = page.get_by_role("link", name=NAV_TRACKING_MENU_RE)
+    if not nav.count():
+        nav = page.get_by_role("button", name=NAV_TRACKING_MENU_RE)
+    try:
+        nav.first.wait_for(state="visible", timeout=timeout_ms)
+    except Exception as exc:
+        raise FedExWebPodError("Track International 菜单未出现") from exc
+    nav.first.click(timeout=5_000)
+
+
+def _submit_requery_form(page, tracking_number: str, timeout_ms: int) -> None:
+    """后续查询：使用页面顶部“Track International”下拉框内的二次查询
+    输入框，不重新进入 FedEx 首页。"""
+    _open_requery_dropdown(page, timeout_ms)
+    box = page.get_by_placeholder(REQUERY_INPUT_RE)
+    if not box.count():
+        box = page.locator(
+            "input[placeholder*='tracking' i]:visible, "
+            "input[id^='tracking_number_']:visible"
+        ).first
+    try:
+        box.first.wait_for(state="visible", timeout=5_000)
+    except Exception as exc:
+        raise FedExWebPodError("二次查询框未出现") from exc
+    box.first.click(timeout=5_000)
+    box.first.press("Control+A")
+    box.first.press("Backspace")
+    box.first.type(tracking_number, delay=70)
+    button = page.get_by_role("button", name=REQUERY_BUTTON_RE)
+    if not button.count():
+        button = page.locator("button[type='submit']:visible")
+    try:
+        button.first.wait_for(state="visible", timeout=8_000)
+    except Exception as exc:
+        raise FedExWebPodError("二次查询按钮未出现") from exc
+    button.first.click(timeout=10_000)
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=min(timeout_ms, 20_000))
+    except Exception:
+        pass
+
+
+def _wait_for_main_page(page, tracking_number: str, timeout_seconds: int) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if _main_page_ready(page, tracking_number):
+            return
+        text = _body_text(page)
+        if BLOCK_PAGE_RE.search(text):
+            raise FedExWebPodError("FedEx 页面触发限流、验证码或服务不可用，请停止连续查询后再重试")
+        page.wait_for_timeout(500)
+    raise FedExWebPodError("等待 FedEx 查询结果主页超时")
+
+
+def _open_details(
+    page,
+    main_text: str,
+    timeout_seconds: int,
+    tracking_number: str = "",
+) -> None:
+    candidate = _visible_detail_candidate(page, tracking_number)
+    if candidate is None:
+        raise FedExWebPodError("没有找到 FedEx'查看更多详细信息'")
+    candidate.click(timeout=5_000)
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        text = _body_text(page)
+        if text != main_text and DETAIL_CONTENT_RE.search(text):
+            return
+        page.wait_for_timeout(500)
+    raise FedExWebPodError("等待 FedEx 详情页展开超时")
+
+
+def _print_current_page(context, page, destination: Path) -> None:
+    if "fedex.com" not in str(page.url).casefold():
+        raise FedExWebPodError("当前不是 FedEx 官网页面")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    _hide_print_overlays(page)
+    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+    session = context.new_cdp_session(page)
+    try:
+        result = session.send(
+            "Page.printToPDF",
+            {
+                "landscape": False,
+                "displayHeaderFooter": False,
+                "printBackground": True,
+                "paperWidth": 8.27,
+                "paperHeight": 11.69,
+                "marginTop": 0.25,
+                "marginBottom": 0.25,
+                "marginLeft": 0.25,
+                "marginRight": 0.25,
+            },
+        )
+        temporary.write_bytes(base64.b64decode(result["data"], validate=True))
+        if not is_valid_pdf(temporary):
+            raise FedExWebPodError(f"生成的 PDF 无效：{destination.name}")
+        temporary.replace(destination)
+    finally:
+        try:
+            session.detach()
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+class FedExEdgePodSession:
+    """One real Edge/Chrome process reused for every shipment in a run.
+
+    首票通过 FedEx 官网首页表单查询；此后的运单改用页面顶部
+    “Track International”下拉框内的二次查询框，减少重复进入首页的次数。
+    查询期间浏览器窗口保持最大化，确保顶部导航完整显示。
+    """
+
+    def __init__(
+        self,
+        playwright,
+        output_dir: Any,
+        *,
+        edge_path: str = "",
+        browser: str = "edge",
+        profile_dir: Any = None,
+        minimize_browser: bool = False,
+        timeout_seconds: int = 45,
+        warmup_seconds: int = 30,
+        overwrite: bool = True,
+        min_query_interval_seconds: float = 12.0,
+        max_queries_per_window: int = 0,
+        query_window_seconds: int = 1800,
+        log_func: Optional[Callable[[str], None]] = None,
+    ) -> None:
+        self.playwright = playwright
+        self.output_dir = Path(output_dir)
+        self.browser_name = str(browser or "edge").lower()
+        self.edge_path = find_browser(self.browser_name, edge_path)
+        self.profile_dir = Path(
+            profile_dir or (get_data_path() / f"fedex_{self.browser_name}_profile")
+        )
+        # 查询必须最大化窗口，才能看到完整的“Track International”菜单
+        # 而不是被折叠进汉堡菜单；--minimize 仅用于调试，不建议正式使用。
+        self.minimize_browser = minimize_browser
+        self.timeout_seconds = max(15, int(timeout_seconds))
+        self.warmup_seconds = max(0, int(warmup_seconds))
+        self.timeout_ms = min(self.timeout_seconds * 1000, 60_000)
+        self.overwrite = overwrite
+        # 保守节流：不规避 FedEx 限制，只降低连续网页查询造成的崩溃概率。
+        self.min_query_interval_seconds = max(3.0, float(min_query_interval_seconds))
+        self.max_queries_per_window = max(0, int(max_queries_per_window))
+        self.query_window_seconds = max(60, int(query_window_seconds))
+        self._query_times: deque = deque()
+        self._last_query_at = 0.0
+        self._blocked_until = 0.0
+        self._has_queried_once = False
+        self.log = log_func or (lambda _message: None)
+        self.process = None
+        self.browser = None
+        self.context = None
+        self.page = None
+
+    def start(self) -> None:
+        if self.page is not None:
+            return
+        self.profile_dir.mkdir(parents=True, exist_ok=True)
+        port = _free_local_port()
+        cdp_url = f"http://127.0.0.1:{port}"
+        command = [
+            self.edge_path,
+            f"--remote-debugging-port={port}",
+            f"--user-data-dir={self.profile_dir}",
+            "--remote-allow-origins=*",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-renderer-backgrounding",
+            "--disable-background-timer-throttling",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--start-maximized",
+            "--new-window",
+            TRACKING_PAGE,
+        ]
+        self.log(f"启动真实{self.browser_name}，准备保存 FedEx 网页 POD")
+        self.process = subprocess.Popen(command, close_fds=True)
+        _wait_for_cdp(cdp_url)
+        self.browser = self.playwright.chromium.connect_over_cdp(cdp_url)
+        if not self.browser.contexts:
+            raise FedExWebPodError("浏览器没有可用上下文")
+        self.context = self.browser.contexts[0]
+        self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
+        self.page.set_default_timeout(15_000)
+        if self.warmup_seconds:
+            self.log(
+                f"FedEx {self.browser_name} 预热 {self.warmup_seconds} 秒；如公司要求登录，请现在完成登录"
+            )
+            self.page.wait_for_timeout(self.warmup_seconds * 1000)
+        if self.minimize_browser:
+            try:
+                cdp = self.context.new_cdp_session(self.page)
+                info = cdp.send("Browser.getWindowForTarget")
+                cdp.send(
+                    "Browser.setWindowBounds",
+                    {"windowId": info["windowId"], "bounds": {"windowState": "minimized"}},
+                )
+                cdp.detach()
+            except Exception:
+                pass
+        else:
+            # 正式查询流程：确保窗口最大化，顶部菜单显示为
+            # “Track International”而不是折叠图标。
+            _maximize_window(self.context, self.page)
+
+    def _pace_before_query(self) -> None:
+        now = time.monotonic()
+        while self._query_times and now - self._query_times[0] >= self.query_window_seconds:
+            self._query_times.popleft()
+
+        if now < self._blocked_until:
+            remain = int(self._blocked_until - now)
+            raise FedExWebPodError(f"FedEx 已触发保护性暂停，约 {remain} 秒后再运行")
+
+        # 0 表示不设置固定票数上限。网站异常由外层连续失败断路器处理。
+        if self.max_queries_per_window > 0 and len(self._query_times) >= self.max_queries_per_window:
+            remain = int(self.query_window_seconds - (now - self._query_times[0])) + 1
+            raise FedExWebPodError(
+                f"已达到安全批次上限 {self.max_queries_per_window} 条；"
+                f"本会话暂停，约 {remain} 秒后再运行"
+            )
+
+        # 每票间隔加入少量随机抖动，避免固定节奏集中冲击网页。
+        target = self.min_query_interval_seconds + random.uniform(0.0, 4.0)
+        elapsed = now - self._last_query_at if self._last_query_at else target
+        if elapsed < target:
+            wait_seconds = target - elapsed
+            self.log(f"FedEx 网页保护性间隔 {wait_seconds:.1f} 秒")
+            time.sleep(wait_seconds)
+
+    def _record_query(self) -> None:
+        now = time.monotonic()
+        self._last_query_at = now
+        self._query_times.append(now)
+
+    def _load_main_page(self, tracking_number: str) -> None:
+        self._pace_before_query()
+        try:
+            if not self.minimize_browser:
+                # 每次查询前确认窗口仍是最大化状态（部分站点在查询后
+                # 会重置窗口尺寸），保证“Track International”菜单可见。
+                _maximize_window(self.context, self.page)
+            if not self._has_queried_once:
+                # 只有第一票才进入 FedEx 官网首页。
+                _submit_tracking_form(self.page, tracking_number, self.timeout_ms)
+            else:
+                # 后续运单使用顶部“Track International”下拉框的二次查询框。
+                try:
+                    _submit_requery_form(self.page, tracking_number, self.timeout_ms)
+                except FedExWebPodError as requery_error:
+                    self.log(f"二次查询框不可用，改为重新进入首页：{requery_error}")
+                    _submit_tracking_form(self.page, tracking_number, self.timeout_ms)
+            self._has_queried_once = True
+            self._record_query()
+            _wait_for_main_page(self.page, tracking_number, self.timeout_seconds)
+        except Exception as exc:
+            text = _body_text(self.page)
+            if BLOCK_PAGE_RE.search(text) or "限流" in str(exc) or "验证码" in str(exc):
+                self._blocked_until = time.monotonic() + 900
+            raise
+
+    def download(self, tracking_number: str) -> FedExWebPodResult:
+        number = normalize_tracking_number(tracking_number)
+        main_pdf, detail_pdf = output_paths(self.output_dir, number)
+        if not self.overwrite and is_valid_pdf(main_pdf) and is_valid_pdf(detail_pdf):
+            return FedExWebPodResult(number, True, str(main_pdf), str(detail_pdf))
+        try:
+            self.start()
+            self._load_main_page(number)
+            main_text = _body_text(self.page)
+            _print_current_page(self.context, self.page, main_pdf)
+            _open_details(self.page, main_text, self.timeout_seconds, number)
+            _print_current_page(self.context, self.page, detail_pdf)
+            return FedExWebPodResult(number, True, str(main_pdf), str(detail_pdf))
+        except Exception as exc:
+            return FedExWebPodResult(
+                number,
+                False,
+                str(main_pdf) if is_valid_pdf(main_pdf) else "",
+                str(detail_pdf) if is_valid_pdf(detail_pdf) else "",
+                str(exc),
+            )
+
+    def close(self) -> None:
+        browser, process = self.browser, self.process
+        self.page = self.context = self.browser = self.process = None
+        if browser is not None:
+            try:
+                browser.close()
+            except Exception:
+                pass
+        if process is not None:
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+        # 记录本次关闭的浏览器，供下次运行自动切换。
+        save_last_browser(self.browser_name)
+
+
+TRACKING_HEADERS = {
+    "运单号", "快递单号", "追踪号", "tracking number", "tracking no",
+    "tracking no.", "awb", "awb no", "waybill", "fedex tracking number",
+}
+
+
+def _clean_header(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip()).casefold()
+
+
+def _find_tracking_column(ws, requested: str = "") -> tuple[int, int]:
+    """返回 (表头行, 运单号列)。默认在前 20 行内识别。"""
+    wanted = _clean_header(requested)
+    for row in range(1, min(ws.max_row, 20) + 1):
+        for col in range(1, ws.max_column + 1):
+            header = _clean_header(ws.cell(row, col).value)
+            if wanted and header == wanted:
+                return row, col
+            if not wanted and header in TRACKING_HEADERS:
+                return row, col
+    if requested:
+        raise ValueError(f"找不到指定运单号列：{requested}")
+    raise ValueError("找不到运单号列。支持列名：运单号、快递单号、追踪号、Tracking Number、AWB")
+
+
+def _ensure_result_columns(ws, header_row: int) -> dict[str, int]:
+    names = ["POD状态", "POD主页文件", "POD详情文件", "POD错误", "POD处理时间"]
+    found = {}
+    for col in range(1, ws.max_column + 1):
+        value = str(ws.cell(header_row, col).value or "").strip()
+        if value in names:
+            found[value] = col
+    for name in names:
+        if name not in found:
+            col = ws.max_column + 1
+            ws.cell(header_row, col, name)
+            found[name] = col
+    return found
+
+
+def process_excel(
+    excel_path: Any,
+    output_dir: Any = "",
+    *,
+    browser: str = "auto",
+    sheet_name: str = "",
+    tracking_column: str = "",
+    overwrite_pdf: bool = False,
+    min_interval: float = 12.0,
+    batch_limit: int = 0,
+    window_minutes: int = 30,
+    visible: bool = True,
+) -> Path:
+    try:
+        from openpyxl import load_workbook
+    except ImportError as exc:
+        raise RuntimeError("缺少 openpyxl，请执行：py -m pip install openpyxl") from exc
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:
+        raise RuntimeError(
+            "缺少 Playwright，请执行：py -m pip install playwright"
+        ) from exc
+
+    source = Path(excel_path).expanduser().resolve()
+    if not source.is_file():
+        raise FileNotFoundError(f"Excel 文件不存在：{source}")
+    if source.suffix.lower() not in {".xlsx", ".xlsm"}:
+        raise ValueError("仅支持 .xlsx 或 .xlsm 文件")
+
+    pod_dir = Path(output_dir).expanduser().resolve() if output_dir else source.parent / "FedEx_POD"
+    pod_dir.mkdir(parents=True, exist_ok=True)
+    result_path = source.with_name(f"{source.stem}_POD结果{source.suffix}")
+
+    keep_vba = source.suffix.lower() == ".xlsm"
+    wb = load_workbook(source, keep_vba=keep_vba)
+    ws = wb[sheet_name] if sheet_name else wb.active
+    header_row, tracking_col = _find_tracking_column(ws, tracking_column)
+    result_cols = _ensure_result_columns(ws, header_row)
+
+    jobs = []
+    seen = set()
+    for row in range(header_row + 1, ws.max_row + 1):
+        raw = ws.cell(row, tracking_col).value
+        if raw is None or str(raw).strip() == "":
+            continue
+        try:
+            number = normalize_tracking_number(raw)
+        except ValueError as exc:
+            ws.cell(row, result_cols["POD状态"], "跳过")
+            ws.cell(row, result_cols["POD错误"], str(exc))
+            continue
+        if number in seen:
+            ws.cell(row, result_cols["POD状态"], "跳过重复")
+            continue
+        seen.add(number)
+        if not overwrite_pdf:
+            main_pdf, detail_pdf = output_paths(pod_dir, number)
+            if is_valid_pdf(main_pdf) and is_valid_pdf(detail_pdf):
+                ws.cell(row, result_cols["POD状态"], "已存在")
+                ws.cell(row, result_cols["POD主页文件"], str(main_pdf))
+                ws.cell(row, result_cols["POD详情文件"], str(detail_pdf))
+                continue
+        jobs.append((row, number))
+
+    wb.save(result_path)
+    if not jobs:
+        print(f"没有需要处理的新运单。结果文件：{result_path}")
+        return result_path
+
+    current_browser, reason = resolve_browser(browser)
+    print(f"工作表：{ws.title}；待处理：{len(jobs)}；浏览器：{current_browser}（{reason}）")
+
+    with sync_playwright() as playwright:
+        alternate_browser = "chrome" if current_browser == "edge" else "edge"
+        switched_browser = False
+        consecutive_website_failures = 0
+        stop_reason = ""
+
+        def create_session(browser_name: str) -> FedExEdgePodSession:
+            return FedExEdgePodSession(
+                playwright,
+                pod_dir,
+                browser=browser_name,
+                minimize_browser=not visible,
+                warmup_seconds=5,
+                overwrite=overwrite_pdf,
+                min_query_interval_seconds=min_interval,
+                max_queries_per_window=batch_limit,
+                query_window_seconds=window_minutes * 60,
+                log_func=lambda message: print(
+                    f"[FedEx/{browser_name}] {message}", flush=True
+                ),
+            )
+
+        session = create_session(current_browser)
+        try:
+            for index, (row, number) in enumerate(jobs, 1):
+                print(
+                    f"[{index}/{len(jobs)}] {number}，浏览器：{current_browser}",
+                    flush=True,
+                )
+                result = session.download(number)
+                website_failure = (not result.ok) and is_website_failure(result.error)
+
+                if result.ok:
+                    consecutive_website_failures = 0
+                elif website_failure:
+                    consecutive_website_failures += 1
+                else:
+                    # 单票无详情、运单业务异常等不属于网站连续崩溃。
+                    consecutive_website_failures = 0
+
+                ws.cell(row, result_cols["POD状态"], "成功" if result.ok else "失败")
+                ws.cell(row, result_cols["POD主页文件"], result.main_pdf)
+                ws.cell(row, result_cols["POD详情文件"], result.detail_pdf)
+                ws.cell(row, result_cols["POD错误"], result.error)
+                ws.cell(row, result_cols["POD处理时间"], time.strftime("%Y-%m-%d %H:%M:%S"))
+                wb.save(result_path)  # 每票立即保存，异常退出也可续跑
+
+                if switched_browser and website_failure:
+                    stop_reason = (
+                        f"切换到 {current_browser} 后仍出现网站级错误，"
+                        "已保存进度并停止，避免持续请求。"
+                    )
+                    print(stop_reason, flush=True)
+                    for pending_row, _pending_number in jobs[index:]:
+                        ws.cell(pending_row, result_cols["POD状态"], "待下次继续")
+                    wb.save(result_path)
+                    break
+
+                if not switched_browser and consecutive_website_failures >= 3:
+                    print(
+                        f"{current_browser} 连续出现 3 次网站级错误，"
+                        f"关闭并切换到 {alternate_browser}。",
+                        flush=True,
+                    )
+                    session.close()
+                    try:
+                        # 仅切换一次。下一张未完成运单作为另一浏览器的验证票。
+                        session = create_session(alternate_browser)
+                        current_browser = alternate_browser
+                        switched_browser = True
+                        consecutive_website_failures = 0
+                    except Exception as exc:
+                        stop_reason = f"无法切换到 {alternate_browser}：{exc}"
+                        print(stop_reason, flush=True)
+                        for pending_row, _pending_number in jobs[index:]:
+                            ws.cell(pending_row, result_cols["POD状态"], "待下次继续")
+                        wb.save(result_path)
+                        break
+        finally:
+            session.close()
+            wb.save(result_path)
+
+    print(f"完成。PDF目录：{pod_dir}")
+    print(f"结果Excel：{result_path}")
+    return result_path
+
+
+def _pick_file() -> str:
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        path = filedialog.askopenfilename(
+            title="选择包含 FedEx 运单号的 Excel",
+            filetypes=[("Excel", "*.xlsx *.xlsm")],
+        )
+        root.destroy()
+        return path
+    except Exception:
+        return ""
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="从 Excel 批量保存 FedEx 查询主页及详情页 PDF")
+    parser.add_argument("excel", nargs="?", help="Excel 文件路径；省略时弹出选择窗口")
+    parser.add_argument(
+        "--browser",
+        choices=["edge", "chrome", "auto"],
+        default="auto",
+        help="auto（默认）：根据上次运行记录自动切换为另一浏览器；也可强制指定 edge 或 chrome",
+    )
+    parser.add_argument("--output", default="", help="PDF 输出目录")
+    parser.add_argument("--sheet", default="", help="工作表名称，默认活动表")
+    parser.add_argument("--column", default="", help="运单号列标题，默认自动识别")
+    parser.add_argument("--overwrite", action="store_true", help="覆盖已有 PDF")
+    parser.add_argument("--interval", type=float, default=12.0, help="每票最小间隔秒数")
+    parser.add_argument("--batch-limit", type=int, default=0, help="时间窗口内最多查询票数；0表示不设固定上限")
+    parser.add_argument("--window-minutes", type=int, default=30, help="批次时间窗口分钟")
+    parser.add_argument(
+        "--minimize",
+        action="store_true",
+        help="启动后最小化浏览器（调试用；正式查询建议保持默认最大化）",
+    )
+    args = parser.parse_args()
+
+    excel = args.excel or _pick_file()
+    if not excel:
+        print("未选择 Excel 文件。")
+        return 2
+    try:
+        process_excel(
+            excel,
+            args.output,
+            browser=args.browser,
+            sheet_name=args.sheet,
+            tracking_column=args.column,
+            overwrite_pdf=args.overwrite,
+            min_interval=args.interval,
+            batch_limit=args.batch_limit,
+            window_minutes=args.window_minutes,
+            visible=not args.minimize,
+        )
+        return 0
+    except Exception as exc:
+        print(f"运行失败：{exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
