@@ -1,0 +1,772 @@
+# 假期英语长难句：邮件精选
+
+> 用途：结合你日常物流、付款、发票、FedEx 对账工作做英语精读。
+> 
+> 建议方法：先自己划分 **主干 / 从句 / 非谓语 / 介词短语 / 逻辑连接词**，再翻译。暂时不附答案，避免一开始就看到解析。
+
+## 1. 付款条件与系统流程
+
+> We only can pay after the invoice is approved in Coupa (depend on when approver approve these invoices) and no integration issue to SAP, and also checked with treasury team. After all settled, then we can arrange the payment.
+
+### 分析任务
+- 找出 `after` 引导的时间关系。
+- 判断 `depend on ...` 在规范英语中应该怎样处理。
+- 分析 `and` 实际连接了哪些条件。
+- 尝试把原句改写成更规范的商务英语，但不要改变原意。
+
+---
+
+## 2. 为什么尚未到期仍可能影响业务
+
+> This is new Air forwarder supported Oplink Data Center shipment from Jun 2026, the invoice added in PNP in Sep for shipment invoice in Jun and Jul 2026. Thus, it reached credit amount in forwarder internal system, then impact to the available flight capacity to be allocated for Oplink shipments.
+
+### 分析任务
+- 这其实是多个完整意思被逗号连接起来，尝试拆句。
+- 分析 `to be allocated for Oplink shipments` 修饰什么。
+- 理解 `Thus` 和 `then` 分别表达什么逻辑。
+- 注意原邮件英语并不完全规范，试着修正。
+
+---
+
+## 3. FedEx FCA 运费改账
+
+> The shipments listed on invoice 9-560-56311 are under FCA terms, so the freight charges should be paid by the customer. Could you please check why the charges were rejected by the customer? The charges were subsequently returned to FedEx account 242552180, which cannot be used for payment. If there is no issue with the charges, please ask the customer to provide the correct FedEx billing account. I will then complete the LOA to have the charges rebilled to the account provided by the customer.
+
+### 分析任务
+- `listed on invoice ...` 为什么不是谓语？
+- `which cannot be used for payment` 的先行词是什么？
+- 分析 `If there is no issue with...` 条件从句。
+- 重点理解 `have the charges rebilled` 的 **have + 宾语 + 过去分词** 结构。
+- `provided by the customer` 修饰哪个名词？
+
+---
+
+## 4. 银行 cut-off time 与付款
+
+> It is already too late and past the bank’s cut-off time, so the bank is no longer able to process the payments below today.
+
+### 分析任务
+- 找出全句主干。
+- `past the bank's cut-off time` 在句中是什么成分？
+- 为什么用 `no longer` 而不是简单的 `cannot`？
+- `so` 前后是什么逻辑？
+
+---
+
+## 5. Treasury 节后资金安排
+
+> From treasury side, the payment can be processed after holiday. We will arrange the necessary funding based on the payment run. Please let treasury know the amount and date in advance.
+
+### 分析任务
+- `From treasury side` 在整句话中承担什么作用？
+- `can be processed` 是什么语态？为什么付款场景经常使用被动语态？
+- `based on the payment run` 修饰什么？
+- 区分 `fund / funding / payment`。
+
+---
+
+## 6. FedEx 发票争议渠道
+
+> If you have concerns about an invoice, you could raise dispute via FedEx Billing Online, which offers a range of common dispute type and reasons, making your selection effortless.
+
+### 分析任务
+- `If` 引导什么从句？
+- `which` 的先行词是什么？
+- `making your selection effortless` 为什么用 `-ing`？其逻辑主语是什么？
+- 尝试判断 `raise dispute`、`dispute type` 在规范英语中是否需要调整。
+
+---
+
+## 7. 欧盟低价值进口规则变化
+
+> From July 1, 2026, new EU import rules apply. Goods valued below €150 may incur duties, and additional data will be required.
+
+### 分析任务
+- `valued below €150` 是什么结构？修饰什么？
+- 为什么这里是 `may incur duties`？`may` 表示什么？
+- `will be required` 为什么使用被动语态？
+- 比较 `duty`、`duties`、`tax`、`charges`。
+
+---
+
+## 8. FedEx 账单信息变更规则
+
+> Effective 3 June 2026, FedEx T&Cs will be presented in the PEACE payment portal prior to checkout. Customers are required to review and acknowledge them via a mandatory checkbox before completing payment.
+
+### 分析任务
+- `Effective 3 June 2026` 为什么没有谓语仍然可以放句首？
+- `will be presented` 与 `are required` 分别是什么结构？
+- `prior to checkout` 和 `before completing payment` 有什么区别？
+- `review and acknowledge them` 中 `them` 指什么？
+
+---
+
+## 9. 发票缺少付款信息及其影响
+
+> We have noticed that the following invoices do not contain the invoice submission date or payment date. Could you kindly clarify why these details are missing? Your feedback will help us ensure proper reconciliation and avoid any delays in processing.
+
+### 分析任务
+- `We have noticed that ...` 中 `that` 从句是什么成分？
+- `why these details are missing` 为什么不是疑问句语序？
+- 分析 `help us ensure ... and avoid ...`。
+- `delays in processing` 中 `in` 如何理解？
+
+---
+
+## 10. 清关失败、退运与税费争议
+
+> Shipment did not reach the destination due to customs clearance issues. The customer claims the shipment was replaced with AWB 445983129227, and since the original shipment was not cleared, the customer will not pay the destination duty and tax for the returned shipment.
+
+### 分析任务
+- 比较 `due to` 与 `since`：为什么一个后面接名词，一个后面接完整句子？
+- `claims (that) the shipment was replaced...` 中省略了什么？
+- `since the original shipment was not cleared` 是什么从句？
+- `returned shipment` 中 `returned` 是什么形式、什么作用？
+
+---
+
+# Bonus：适合整段精读的一封邮件
+
+下面这组邮件内容特别适合练习，因为同时包含 **条件、时间、原因、被动语态、付款术语和逻辑衔接**：
+
+> Currently 7/8 invoice is under Yin Xu’s role, some items are still confirming the vendor code, and the net due in fall in Oct. We only can pay after the invoice is approved in Coupa (depend on when approver approve these invoices) and no integration issue to SAP, and also checked with treasury team. After all settled, then we can arrange the payment.
+>
+> The expense occurred in June and July, but why the PNP report generated in 20260831 and invoice issued in September, which caused the invoice not due, the due date fall in October, thanks. (net due date = invoice date + payment term)
+
+## 整篇分析建议
+
+1. 先不要翻译，圈出所有谓语动词。
+2. 按“一个核心谓语 = 一个意群”的思路切句。
+3. 标记连接词：`and / but / after / when / which`。
+4. 找出所有被动语态：`is approved / generated / issued ...`。
+5. 判断每个 `and` 到底连接单词、短语还是句子。
+6. 把不规范的邮件英语改成标准商务英语。
+7. 最后重新翻译整段，重点保留原文的业务逻辑，而不是逐词直译。
+
+---
+
+# 推荐假期分析模板
+
+以后每一句都可以按照下面的格式做笔记：
+
+```text
+原句：
+
+一、主干
+S：
+V：
+O/C：
+
+二、从句
+1.
+2.
+
+三、非谓语
+1.
+
+四、介词短语
+1.
+
+五、核心连接词及逻辑
+
+六、逐层翻译
+
+七、自然中文
+
+八、值得积累的商务表达
+
+九、我自己的仿写
+```
+
+这批材料主要来自你近期关于 FedEx 发票、FCA 改账、AP/Treasury 付款、清关和付款追踪的真实邮件，因此词汇和句型与你平时工作高度重合。
+
+---
+
+# 第二批：再选 10 个长难句
+
+> 这一批继续采用真实工作邮件材料，重点增加 rate card、overbilling、SOA、付款追踪、service type、信用额度等场景。
+
+## 11. SOA 与未结发票付款计划
+
+> Please see attached SOA and separate invoice copies. The PDF separate invoice copies will be split into 6 batches and shared with you via email at the earliest. Kindly advise the payment plan for the outstanding invoices attached. If the payments have been made, please send us the remittance advice and proof of payment.
+
+### 分析任务
+- `attached` 在不同位置分别是什么成分？
+- 分析 `will be split ... and shared ...` 的并列被动结构。
+- `If the payments have been made` 为什么使用现在完成时的被动语态？
+- 区分 `remittance advice` 和 `proof of payment`。
+
+---
+
+## 12. Rate Sheet 的法律效力
+
+> The net rate sheets presented in this rate sheet document are for your convenience only, and are not an agreement or part of an agreement.
+
+### 分析任务
+- 主干是什么？
+- `presented in this rate sheet document` 为什么是过去分词？
+- `for your convenience only` 如何理解？
+- `not an agreement or part of an agreement` 为什么使用并列名词结构？
+
+---
+
+## 13. 实际发票金额优先
+
+> In the event of a conflict between any net rates or net rate sheets and any actual invoiced amount, the actual invoiced amount shall always prevail.
+
+### 分析任务
+- `In the event of` 相当于什么？
+- `between A and B` 中 A、B 分别是什么？
+- `invoiced` 为什么可以修饰 `amount`？
+- `shall prevail` 在合同、商务文件里是什么语气？
+
+---
+
+## 14. 净价不包括哪些费用
+
+> Net rates are calculated based on applicable transportation discounts and do not include surcharges, ancillary or other charges, duties and taxes, or special handling fees.
+
+### 分析任务
+- `are calculated` 和 `do not include` 为什么一个被动、一个主动？
+- `based on` 在这里修饰什么？
+- 拆解后面的并列宾语。
+- 区分 `surcharge / ancillary charge / duty / tax / handling fee`。
+
+---
+
+## 15. 运输模式变化造成价格变化
+
+> For services with Earned Discounts, actual net rates may vary due to changes in the customer's shipping patterns that affect revenue thresholds used in net rate calculations.
+
+### 分析任务
+- `with Earned Discounts` 修饰什么？
+- `due to` 后面的核心名词是什么？
+- `that affect revenue thresholds` 的先行词是什么？
+- `used in net rate calculations` 又修饰什么？
+- 尝试画出两个后置修饰成分的层级关系。
+
+---
+
+## 16. 汇率导致账单费率不一致
+
+> If ratesheet currency differs from account billing currency, then net rates will not match the billing statement. This rate mismatch will increase or decrease with exchange rate fluctuations.
+
+### 分析任务
+- 分析 `If A differs from B, C will...`。
+- `differ from` 与 `be different from` 有什么区别？
+- `match` 在这里为什么不是“比赛”？
+- `with exchange rate fluctuations` 表达什么关系？
+
+---
+
+## 17. 滞留费产生原因
+
+> The detention charges were incurred because the consignee did not receive the shipments at the scheduled receiving time as notified in advance.
+
+### 分析任务
+- `were incurred` 是什么语态？
+- `because` 后为什么可以直接接完整句子？
+- `scheduled receiving time` 如何理解？
+- `as notified in advance` 的逻辑主语和含义是什么？
+
+---
+
+## 18. 仓库关闭导致 Layover Charge
+
+> The shipment incurred layover charges because the consignee's warehouse was closed early due to a tornado. However, the warehouse did not notify the carrier in advance of the closure, resulting in a delivery delay and subsequent layover charges.
+
+### 分析任务
+- 比较 `because` 和 `due to` 后面的结构。
+- `resulting in...` 为什么不是一个独立谓语？
+- `subsequent` 表达怎样的时间和因果关系？
+- 第二句的逻辑链条尝试概括为 A → B → C。
+
+---
+
+## 19. 系统状态与发票异常
+
+> The invoices for August have already been uploaded into the system, and most of them are now showing as Approved. However, there are still some invoices that are only showing a Received status.
+
+### 分析任务
+- 为什么第一句使用 `have been uploaded`？
+- `most of them` 中 `them` 指代什么？
+- `that are only showing...` 是什么从句？
+- 比较 `Approved` 与 `Received` 在句法上如何充当状态描述。
+
+---
+
+## 20. 付款逾期对供应商的影响
+
+> We would like to follow up regarding the invoices with your submission date in the system. As of now, there remains an outstanding balance that has not yet been settled. Given the significant impact of this overdue amount, we kindly request that the payment be completed within this month.
+
+### 分析任务
+- `with your submission date in the system` 修饰什么？
+- `there remains...` 是什么句型？
+- `that has not yet been settled` 是什么从句？
+- `Given...` 为什么可以直接放在句首？
+- `request that the payment be completed` 为什么是 `be completed`？可了解正式英语中的虚拟语气。
+
+---
+
+# 三篇 300+ 词精读材料
+
+> 说明：下面三篇是根据你邮件中的真实业务主题重新编排的“精读练习稿”。它们不是某一封邮件的逐字复制，而是为了英语学习，把真实工作场景里的表达、逻辑和语法集中到一篇完整文章中。
+
+## Passage 1: Why an Invoice Can Be Correct but Still Fail the Payment Process
+
+In an international logistics operation, confirming that an invoice amount is correct does not necessarily mean that the invoice can be paid immediately. A payment normally depends on several connected processes, each of which may affect the final payment date. For example, an invoice may first need to be uploaded into an internal system, matched with the relevant shipment information, reviewed against an approved rate card, and approved by the responsible person. Even after the invoice has been approved, the transaction may still depend on successful integration with another financial system and on whether sufficient funding is available for the scheduled payment run.
+
+This distinction becomes particularly important when a supplier requests an urgent payment. The supplier may argue that the transportation service was completed several months earlier and that the outstanding amount is already affecting the credit available to the customer. From the supplier's perspective, delayed payment may create a commercial risk because the account could be restricted or because available transportation capacity might be affected. From the accounts payable perspective, however, the official due date may still fall in a later month if the invoice itself was issued later than the date on which the logistics service occurred. In such a case, both sides may be describing the situation correctly while focusing on different dates and different business risks.
+
+Another possible complication is the bank's cut-off time. Even if an urgent payment has obtained all necessary internal approvals, the bank may no longer be able to process it on the same business day once the cut-off time has passed. Treasury may therefore need to arrange the required funding for a later payment run. This is why clear communication among operations, accounts payable, treasury, and the supplier is essential. The key question is not simply whether an invoice is correct, but whether all conditions required for payment have been satisfied at the same time.
+
+### 精读重点
+1. `confirming that ... does not necessarily mean that ...`
+2. `each of which may affect...`
+3. `Even after...`
+4. `whether sufficient funding is available...`
+5. `while focusing on...`
+6. `once the cut-off time has passed`
+7. 最后一段的 `not simply A, but whether B` 逻辑。
+
+---
+
+## Passage 2: Understanding Freight Charges, Rate Cards, and Billing Disputes
+
+Reviewing a freight invoice is more complicated than comparing the total amount on the invoice with a single price in a rate card. Transportation charges may depend on the shipment's origin and destination, service type, chargeable weight, billing currency, fuel surcharge, special handling requirements, and other ancillary charges. In some cases, the rate itself is quoted per kilogram, which means that the applicable rate must be multiplied by the shipment weight before the transportation charge can be compared with the invoice. In other cases, dimensional weight rather than actual weight may be used as the basis for billing, particularly when the package occupies a large amount of space relative to its physical weight.
+
+Rate sheets also contain conditions that are easy to overlook. A net rate may be calculated on the basis of specific transportation discounts, while surcharges, duties, taxes, or special handling fees are excluded. The currency used in the rate sheet may also differ from the account's billing currency. When that happens, an apparent pricing discrepancy may be caused by exchange-rate movements rather than by an incorrect transportation rate. In addition, some discounts may depend on shipping patterns or revenue thresholds, which means that the actual net rate may change when the underlying conditions change.
+
+For this reason, an invoice flagged by a system as “overbilled” should not automatically be treated as incorrect. The reviewer needs to understand why the system generated the exception and then determine whether the missing rate, service type, surcharge, or calculation basis explains the difference. If the billed amount is genuinely incorrect, a credit note or another adjustment may be required. If the charge is correct, supporting calculations and the applicable rate information should be provided so that the invoice can continue through the approval process. A good invoice review therefore requires both numerical checking and an understanding of the commercial rules behind the numbers.
+
+### 精读重点
+1. `more complicated than comparing...`
+2. `which means that...`
+3. `dimensional weight rather than actual weight`
+4. `while surcharges... are excluded`
+5. `When that happens...`
+6. `which means that the actual net rate may change...`
+7. `an invoice flagged by a system as...`
+8. `so that the invoice can continue...`
+
+---
+
+## Passage 3: How to Investigate a Shipment Exception Without Jumping to Conclusions
+
+When a shipment exception is reported, the first status shown in a tracking system does not always provide enough information to determine what has actually happened. A shipment may appear to have stopped moving because customs clearance is pending, because documentation is incomplete, because the consignee was unavailable, or because one package in a multi-piece shipment has a different scanning history from the other packages. For this reason, an effective investigation should distinguish between what is directly confirmed by tracking records and what is only inferred from surrounding information.
+
+Consider a shipment containing several packages. If most packages show a delivery scan while one package has no further scan after a certain point, it may be tempting to assume that the missing package was also delivered. Other information, such as the consignee's open-order records or feedback from a destination team, may support that assumption. However, unless a delivery record or confirmation from the consignee is available, the conclusion should still be presented as an inference rather than as a confirmed fact. The operational team may therefore need to contact the consignee, obtain delivery confirmation, or ask the carrier to conduct a more detailed search.
+
+Customs exceptions require a similar approach. If customs identifies a discrepancy between the declared country of origin and the supporting commercial documents, the shipment may be held until corrected documentation is provided. The important task is to determine exactly which information is inconsistent and which document can resolve the discrepancy. Instead of simply asking someone to “handle the customs issue,” a more effective message explains what customs found, what document is required, and who is expected to obtain or provide it.
+
+The same principle applies to billing and delivery investigations: separate confirmed facts from assumptions, identify the missing evidence, and assign the next action clearly. Doing so not only makes communication more efficient but also creates a better audit trail when the case must later be reviewed by another team.
+
+### 精读重点
+1. `does not always provide enough information to determine...`
+2. 连续四个 `because` 的并列逻辑。
+3. `what is directly confirmed ... and what is only inferred...`
+4. `If most packages show... while one package...`
+5. `it may be tempting to assume that...`
+6. `unless ... is available`
+7. `a discrepancy between A and B`
+8. `until corrected documentation is provided`
+9. `Instead of simply asking...`
+10. `Doing so not only... but also...`
+
+---
+
+# 第二批学习建议
+
+这 3 篇建议不要一次全部翻译。每篇可以按下面四轮处理：
+
+1. **第一遍，只读逻辑**：不查词，判断每一段到底在讲什么。
+2. **第二遍，拆结构**：标 S / V / O / C，圈出从句连接词和非谓语。
+3. **第三遍，逐句翻译**：先直译结构，再整理成自然中文。
+4. **第四遍，反向输出**：遮住英文，根据中文逻辑尝试用英文重新表达。
+
+对于你的工作英语，第四步尤其重要。目标不是认识这些句子，而是以后遇到付款异常、清关异常、rate discrepancy、duplicate payment、rebilling 时，你能自己组织出同类型的句子。
+
+---
+
+# 参考答案：20组长难句中文翻译与语法解析
+
+> 说明：第1、2、5组以及 Bonus 原文来自非母语商务邮件，存在语法问题。解析时会先说明原句想表达的意思，再给出规范表达。学习时要区分“理解原邮件”和“模仿正确英语”。
+
+## 1. 付款条件与系统流程
+
+### 中文翻译
+我们只能在发票获得 Coupa 批准后付款，具体时间取决于审批人何时批准这些发票。同时，还必须确保 Coupa 与 SAP 之间不存在系统集成问题，并与资金团队完成确认。所有事项解决后，我们才能安排付款。
+
+### 语法解析
+- `We can only pay` 是主句，`We` 是主语，`can pay` 是谓语，`only` 通常放在情态动词 `can` 后面。
+- `after the invoice is approved in Coupa` 是 `after` 引导的时间状语从句；`is approved` 是一般现在时的被动语态。
+- `depending on when the approver approves these invoices` 中，`depending on...` 是现在分词短语，补充说明付款时间取决于什么；`when...` 是 `on` 后面的宾语从句，使用陈述句语序。
+- `provided that there are no integration issues...` 可用于表达“前提是……”。
+- 原文 `depend on when approver approve` 缺少形式变化和冠词，应为 `depending on when the approver approves...`。
+- 原文 `After all settled` 缺少主语和助动词，应为 `After everything is settled` 或 `Once all the issues have been resolved`。
+
+### 推荐改写
+> We can only make the payment after the invoices have been approved in Coupa, depending on when the approver completes the approval. We also need to ensure that there are no integration issues with SAP and confirm the funding with the Treasury team. Once everything has been settled, we can arrange the payment.
+
+---
+
+## 2. 为什么尚未到期仍可能影响业务
+
+### 中文翻译
+这是自2026年6月起为 Oplink 数据中心货运提供支持的新空运代理。6月和7月货运对应的发票直到9月才被加入 PNP。因此，未付金额占用了货代内部系统的信用额度，进而影响可分配给 Oplink 货运的舱位。
+
+### 语法解析
+- 原文是典型的逗号拼接句，应拆成三句。
+- `This is a new air forwarder supporting...` 中，`supporting...` 是现在分词短语，后置修饰 `air forwarder`。
+- `The invoices for shipments made in June and July were not added...until September` 中，`made...` 是过去分词短语，修饰 `shipments`；`not...until...` 表示“直到……才……”。
+- `which in turn affected...` 中，`which` 指前面整件事情；`in turn` 表示“进而”。
+- `available flight capacity to be allocated...` 中，`to be allocated` 是被动不定式，修饰 `capacity`。
+- 原文的 `the invoice added` 缺少 `was`，`then impact` 时态错误，应为 `then impacted` 或 `which affected`。
+
+### 推荐改写
+> This is a new air forwarder supporting Oplink Data Center shipments from June 2026. The invoices for shipments made in June and July were not added to PNP until September. As a result, the outstanding amount used up the credit available in the forwarder's internal system, which in turn affected the flight capacity available for Oplink shipments.
+
+---
+
+## 3. FedEx FCA 运费改账
+
+### 中文翻译
+发票9-560-56311中列出的货件采用 FCA 条款，因此运费应由客户承担。请调查这些费用为什么被客户拒付。之后，这些费用被退回到 FedEx 账号242552180，但该账号不能用于付款。如果费用本身没有问题，请让客户提供正确的 FedEx 付费账号。随后我会完成 LOA，将这些费用重新计费到客户提供的账号。
+
+### 语法解析
+- `The shipments ... are under FCA terms` 是主句。
+- `listed on invoice...` 是过去分词短语，等于 `which are listed on invoice...`，修饰 `shipments`。
+- `why the charges were rejected` 是 `check` 的宾语从句，使用陈述句语序；`were rejected` 是被动语态。
+- `which cannot be used for payment` 是非限制性定语从句。按紧邻原则，语法上修饰 `FedEx account 242552180`。
+- `If there is no issue with the charges` 是条件状语从句。
+- `have the charges rebilled` 是 `have + 宾语 + 过去分词`，表示安排别人完成某事，即“安排费用被重新计费”。
+- `provided by the customer` 是过去分词短语，修饰 `the account`。
+
+---
+
+## 4. 银行 cut-off time 与付款
+
+### 中文翻译
+现在已经太晚，并且已经超过银行的当日处理截止时间，因此银行今天无法再处理下列付款。
+
+### 语法解析
+- 第一分句主干是 `It is too late`。
+- `past the bank's cut-off time` 与 `too late` 并列，都是主语补语，描述当前时间状态。
+- `so` 连接原因和结果。
+- 第二分句主干是 `the bank is no longer able to process...`。
+- `no longer` 表示“原本能够，但现在不再能够”，比单纯的 `cannot` 更强调状态变化。
+- `below` 后置修饰 `payments`，表示“下列付款”。
+
+---
+
+## 5. Treasury 节后资金安排
+
+### 中文翻译
+从资金团队的角度来看，这笔付款可以在节后处理。我们会根据付款批次安排所需资金。请提前将付款金额和日期告知资金团队。
+
+### 语法解析
+- `From the Treasury side` 是句首介词短语，表示立场或责任范围。规范写法通常加 `the`。
+- `the payment can be processed` 是情态动词加被动语态，重点放在付款能否被处理，而不是谁执行。
+- `after the holiday` 是时间状语；规范英语通常需要 `the`。
+- `based on the payment run` 是过去分词短语，表示资金安排的依据。
+- `fund` 可作名词或动词，强调具体资金；`funding` 是不可数名词，强调资金安排或资金来源；`payment` 是付给供应商的款项。
+
+---
+
+## 6. FedEx 发票争议渠道
+
+### 中文翻译
+如果你对某张发票有疑问，可以通过 FedEx Billing Online 提出争议。该平台提供多种常见的争议类型和原因，让你可以轻松做出选择。
+
+### 语法解析
+- `If you have concerns...` 是条件状语从句。
+- 主句是 `you could raise a dispute...`；规范写法应加冠词 `a`。
+- `which offers...` 是非限制性定语从句，先行词是 `FedEx Billing Online`。
+- `making your selection effortless` 是现在分词结果状语，表示前述功能带来的结果。
+- 规范写法应为 `a range of common dispute types and reasons`，因为 `types` 为复数。
+
+---
+
+## 7. 欧盟低价值进口规则变化
+
+### 中文翻译
+自2026年7月1日起，新的欧盟进口规定开始适用。价值低于150欧元的货物可能会产生关税，而且还需要提供额外数据。
+
+### 语法解析
+- `From July 1, 2026` 是时间状语。
+- `new EU import rules apply` 是完整主句，`apply` 表示“适用、生效”。
+- `Goods valued below €150` 中，`valued below €150` 是过去分词短语，等于 `goods that are valued below €150`。
+- `may incur duties` 中，`may` 表示可能性，不是“获准”。`incur` 表示产生或招致费用。
+- `additional data will be required` 是一般将来时的被动语态。
+- `duties` 通常指关税；`tax` 是更广义的税；`charges` 是收费或费用。
+
+---
+
+## 8. FedEx 条款确认规则
+
+### 中文翻译
+自2026年6月3日起，FedEx 的条款与条件将在结账前显示于 PEACE 付款门户中。客户必须在完成付款前，通过勾选必选复选框来审阅并确认这些条款。
+
+### 语法解析
+- `Effective 3 June 2026` 是省略结构，等于 `Effective from 3 June 2026`，整体作时间状语。
+- `will be presented` 是一般将来时的被动语态。
+- `prior to checkout` 是较正式的介词短语，等于 `before checkout`。
+- `are required to review and acknowledge` 是 `be required to do`，表示被要求做某事。
+- `them` 指 `FedEx T&Cs`。
+- `before completing payment` 中，`before` 是介词，后接动名词 `completing`；其隐含主语是 `Customers`。
+
+---
+
+## 9. 发票缺少付款信息及其影响
+
+### 中文翻译
+我们注意到，以下发票没有包含发票提交日期或付款日期。能否请你说明为什么缺少这些信息？你的反馈将有助于我们确保正确对账，并避免处理过程中的任何延误。
+
+### 语法解析
+- `We have noticed` 使用现在完成时，表示过去发现的问题与当前仍然有关。
+- `that the following invoices...` 是 `noticed` 的宾语从句。
+- `why these details are missing` 是 `clarify` 的宾语从句，使用陈述句语序，而不是 `why are these details missing`。
+- `help us ensure...and avoid...` 为 `help + 宾语 + 动词原形`，`ensure` 和 `avoid` 并列。
+- `delays in processing` 中，`in processing` 表示发生延误的环节，即处理过程中。
+
+---
+
+## 10. 清关失败、退运与税费争议
+
+### 中文翻译
+由于清关问题，该货件未能抵达目的地。客户称该货件已由运单445983129227对应的货件替代。由于原货件没有完成清关，客户不会支付退运货件在目的地所产生的关税和税费。
+
+### 语法解析
+- `due to customs clearance issues` 是原因状语；`due to` 后接名词短语。
+- `claims (that)...` 后面是宾语从句，连接词 `that` 被省略。
+- `was replaced with AWB...` 是被动语态。
+- `since the original shipment was not cleared` 是原因状语从句；`since` 后接完整句子。
+- `returned shipment` 中，`returned` 是过去分词作定语，可理解为“被退回的货件”。
+
+---
+
+## 11. SOA 与未结发票付款计划
+
+### 中文翻译
+请查收随附的对账单和单独的发票副本。PDF 发票副本将分成6批，并尽快通过电子邮件发送给你。请告知附件中未结发票的付款计划。如果款项已经支付，请向我们发送付款通知和付款凭证。
+
+### 语法解析
+- `Please see attached SOA...` 是商务邮件中的省略表达，`attached` 可理解为主语补足方面的描述；更自然的是 `Please see the attached SOA...`。
+- `will be split...and shared...` 是两个并列的被动谓语，共用 `will be`。
+- `at the earliest` 表示“尽早”，但本句更自然的是 `as soon as possible`。
+- `outstanding invoices attached` 中，后置的 `attached` 修饰 `invoices`。
+- `If the payments have been made` 是现在完成时的被动语态，关注截止目前是否已经完成付款。
+- `remittance advice` 是汇款通知或付款明细；`proof of payment` 是付款凭证。
+
+---
+
+## 12. Rate Sheet 的法律效力
+
+### 中文翻译
+本费率文件中列示的净费率表仅为方便你参考，并不构成协议，也不属于协议的一部分。
+
+### 语法解析
+- 主干是 `The net rate sheets are for your convenience only and are not an agreement...`。
+- `presented in this rate sheet document` 是过去分词短语，修饰 `rate sheets`，等于 `which are presented...`。
+- `for your convenience only` 表示“仅供方便参考”，带有限制责任的语气。
+- `an agreement or part of an agreement` 是 `or` 连接的两个并列表语。
+
+---
+
+## 13. 实际发票金额优先
+
+### 中文翻译
+如果任何净费率或净费率表与实际开票金额之间存在冲突，应始终以实际开票金额为准。
+
+### 语法解析
+- `In the event of` 是正式表达，等于 `If there is`。
+- `a conflict between A and B` 表示 A 与 B 之间的冲突。
+- `invoiced` 是过去分词作定语，修饰 `amount`，意为“已开票的”。
+- `shall prevail` 常见于合同或正式条款，表示“应优先适用、应占主导、应以此为准”。
+
+---
+
+## 14. 净价不包括哪些费用
+
+### 中文翻译
+净费率根据适用的运输折扣计算，不包括附加费、辅助费用或其他费用、关税和税款以及特殊处理费。
+
+### 语法解析
+- `Net rates are calculated...` 使用被动语态，因为重点是费率怎样被计算。
+- `and do not include...` 使用主动语态，因为 `net rates` 本身“不包含”后面的项目。
+- `based on applicable transportation discounts` 是过去分词短语，说明计算依据。
+- `surcharges`、`ancillary or other charges`、`duties and taxes`、`special handling fees` 是并列宾语。
+
+---
+
+## 15. 运输模式变化造成价格变化
+
+### 中文翻译
+对于适用累积折扣的服务，实际净费率可能会因客户运输模式的变化而变动；这些变化会影响净费率计算中使用的收入门槛。
+
+### 语法解析
+- `For services with Earned Discounts` 是范围状语，`with...` 修饰 `services`。
+- 主干是 `actual net rates may vary`。
+- `due to changes...` 是原因状语，其核心名词是 `changes`。
+- `that affect revenue thresholds` 是定语从句，先行词按语义应是 `changes`。
+- `used in net rate calculations` 是过去分词短语，修饰 `revenue thresholds`。
+- 层级为：`changes [that affect thresholds [used in calculations]]`。
+
+---
+
+## 16. 汇率导致账单费率不一致
+
+### 中文翻译
+如果费率表使用的币种与账户账单币种不同，净费率就无法与账单金额相匹配。随着汇率波动，这种费率差异可能扩大或缩小。
+
+### 语法解析
+- `If ratesheet currency differs from...` 是条件状语从句。
+- `differ from` 是动词结构；`be different from` 是系表结构，含义基本相同。
+- `match the billing statement` 中，`match` 是及物动词，表示“与……一致或匹配”。
+- `with exchange rate fluctuations` 表示伴随变化，可译为“随着汇率波动”。
+
+---
+
+## 17. 滞留费产生原因
+
+### 中文翻译
+之所以产生车辆滞留费，是因为收货人没有在事先通知的预定收货时间接收货物。
+
+### 语法解析
+- `The detention charges were incurred` 是被动语态，表示费用被产生或发生。
+- `because` 引导原因状语从句，后接完整句子。
+- `scheduled receiving time` 指已经计划好的收货时间。
+- `as notified in advance` 是省略结构，可理解为 `as had been notified in advance`，表示“按照事先通知的安排”。
+
+---
+
+## 18. 仓库关闭导致 Layover Charge
+
+### 中文翻译
+由于龙卷风，收货人的仓库提前关闭，因此该货件产生了中途停留费。但是，仓库没有提前通知承运人关闭安排，导致送货延误，并进一步产生了中途停留费。
+
+### 语法解析
+- `because` 后接完整句子 `the warehouse was closed...`。
+- `due to a tornado` 后接名词短语，说明关闭原因。
+- `resulting in...` 是现在分词结果状语，逻辑主语是前面“仓库未提前通知承运人”这件事。
+- `a delivery delay and subsequent layover charges` 是两个并列结果。
+- 逻辑链：未提前通知关闭 → 车辆无法按计划送货 → 送货延误 → 产生额外停留费。
+
+---
+
+## 19. 系统状态与发票异常
+
+### 中文翻译
+8月份的发票已经上传到系统，其中大部分目前显示为“已批准”。但是，仍有一些发票只显示“已接收”状态。
+
+### 语法解析
+- `have already been uploaded` 是现在完成时的被动语态，表示上传动作已完成且影响当前状态。
+- `most of them` 中的 `them` 指前面的 `invoices`。
+- `are now showing as Approved` 表示当前系统显示状态。
+- `that are only showing...` 是限制性定语从句，修饰 `some invoices`。
+- `Approved` 和 `Received` 是系统状态标签，放在 `show as` 后充当结果状态。
+
+---
+
+## 20. 付款逾期对供应商的影响
+
+### 中文翻译
+我们想跟进系统中已有提交日期的这些发票。目前，仍有一笔尚未结清的未付余额。考虑到这笔逾期金额造成的重大影响，我们谨请在本月内完成付款。
+
+### 语法解析
+- `follow up regarding...` 表示“就……进行跟进”。
+- `with your submission date in the system` 是介词短语，修饰 `invoices`。
+- `there remains an outstanding balance` 是存在句，`remains` 强调该余额仍然存在。
+- `that has not yet been settled` 是定语从句，修饰 `balance`；`has been settled` 是现在完成时的被动语态。
+- `Given the significant impact...` 中，`Given` 是介词，表示“考虑到”。
+- `request that the payment be completed` 中，`that` 从句使用正式英语中的虚拟语气，即 `动词原形 be`，不随主语变化。
+
+---
+
+# 三篇短文中文翻译与语法解析
+
+## Passage 1 参考译文：为什么发票金额正确，却仍可能无法付款
+
+在国际物流运营中，确认发票金额正确，并不一定意味着发票可以立即付款。付款通常取决于多个相互关联的流程，而每个流程都可能影响最终付款日期。例如，发票可能首先需要上传到内部系统，与相关货运信息进行匹配，按照已批准的费率卡进行审核，并由相关负责人批准。即使发票已经获批，交易仍可能取决于与另一财务系统的成功集成，以及计划付款批次是否有足够资金。
+
+当供应商请求紧急付款时，这一区别尤其重要。供应商可能提出，运输服务早在数月前就已经完成，而且未付金额正在占用客户可使用的信用额度。从供应商的角度来看，延迟付款可能产生商业风险，因为账户可能受到限制，或者可用运输舱位可能受到影响。然而，从应付账款团队的角度来看，如果发票开具日期晚于物流服务实际发生日期，正式到期日仍可能落在更晚的月份。在这种情况下，双方对情况的描述可能都是正确的，只是各自关注的日期和业务风险不同。
+
+另一个可能的复杂因素是银行的业务截止时间。即使紧急付款已经获得所有必要的内部批准，一旦超过银行截止时间，银行当天也可能无法继续处理。资金团队因此可能需要为之后的付款批次安排所需资金。这正是运营、应付账款、资金团队和供应商之间进行清晰沟通至关重要的原因。关键问题不只是发票是否正确，而是付款所需的全部条件是否在同一时间得到满足。
+
+### 语法解析
+- `confirming that...` 是动名词短语作主语；第一个 `that` 引导 `confirming` 的宾语从句。
+- `does not necessarily mean that...` 中，`not necessarily` 表示“不一定”；第二个 `that` 引导 `mean` 的宾语从句。
+- `several connected processes, each of which...` 是“名词 + 独立补充结构”；`which` 指 `processes`。
+- `matched / reviewed / approved` 与 `uploaded` 构成并列的过去分词，全部依附于 `may need to be`。
+- `whether sufficient funding is available` 是 `on` 后的宾语从句，表达付款所依赖的不确定条件。
+- `the date on which...` 中，`on which` 是“介词 + 关系代词”，等于 `when`。
+- `while focusing on...` 是现在分词短语，表示双方描述情况时同时存在的差异。
+- `Even if...` 表示让步，“即使已经……仍然……”。
+- `once the cut-off time has passed` 是时间状语从句；现在完成时强调截止时间已经过去。
+- `not simply whether A, but whether B` 是并列对比结构，两个 `whether` 从句都在说明“关键问题是什么”。
+
+---
+
+## Passage 2 参考译文：理解运输费用、费率卡与账单争议
+
+审核运输发票，比把发票总金额与费率卡中的某一个价格进行比较更复杂。运输费用可能取决于货件的始发地和目的地、服务类型、计费重量、账单币种、燃油附加费、特殊处理要求以及其他辅助费用。在某些情况下，费率本身按公斤报价，这意味着必须先用适用费率乘以货件重量，之后才能把运输费与发票进行比较。在其他情况下，计费依据可能是体积重量而不是实际重量，特别是当包裹相对于自身实际重量占用了较大空间时。
+
+费率表中还包含一些容易被忽略的条件。净费率可能根据特定运输折扣计算，而附加费、关税、税款或特殊处理费并不包含在内。费率表所用币种也可能与账户账单币种不同。出现这种情况时，看起来像价格差异的问题，可能是由汇率变动造成的，而不是运输费率错误造成的。此外，有些折扣可能取决于运输模式或收入门槛，这意味着当相关条件发生变化时，实际净费率也可能发生变化。
+
+因此，被系统标记为“多收费”的发票不应自动被认定为错误。审核人员需要理解系统为什么产生异常，然后判断缺失的费率、服务类型、附加费或计算依据是否能够解释该差异。如果开票金额确实错误，可能需要贷项通知单或其他调整。如果收费正确，则应提供支持性计算和适用费率信息，以便发票继续完成审批流程。因此，良好的发票审核既需要数字核对，也需要理解数字背后的商业规则。
+
+### 语法解析
+- `Reviewing a freight invoice` 是动名词短语作主语。
+- `more complicated than comparing...` 是比较结构；`than` 后使用动名词 `comparing`。
+- `which means that...` 是非限制性定语从句，`which` 指前面“按公斤报价”这件事。
+- `must be multiplied` 和 `can be compared` 都是情态动词加被动语态。
+- `dimensional weight rather than actual weight` 中，`rather than` 表示选择关系，“而不是”。
+- `particularly when...` 是时间兼条件状语从句，用来说明体积重计费更常见的情形。
+- `conditions that are easy to overlook` 中，`that` 引导限制性定语从句。
+- `while surcharges...are excluded` 表示对比：净费率按折扣计算，但其他费用被排除。
+- `rather than by an incorrect transportation rate` 与前面的 `by exchange-rate movements` 构成对比。
+- `an invoice flagged by a system as “overbilled”` 中，`flagged...` 是过去分词短语，修饰 `invoice`。
+- `determine whether...explains...` 中，`whether` 引导宾语从句。
+- `so that the invoice can continue...` 是目的状语从句。
+- `both numerical checking and an understanding...` 是 `both A and B` 并列结构。
+
+---
+
+## Passage 3 参考译文：如何调查货运异常，同时避免过早下结论
+
+当系统报告货运异常时，追踪系统最初显示的状态并不总能提供足够信息，让人判断实际发生了什么。货件可能看起来停止移动，原因可能是正在等待清关、文件不完整、收货人无法联系，或者多件货件中的某一个包裹与其他包裹具有不同的扫描记录。因此，有效的调查应当区分哪些信息是由追踪记录直接确认的，哪些信息只是根据周边资料推断出来的。
+
+以包含多个包裹的货件为例。如果大多数包裹显示了送达扫描，而另一个包裹在某个节点后没有进一步扫描记录，人们很容易假定缺少记录的包裹也已经送达。收货人的未结订单记录或目的地团队的反馈等其他信息，可能会支持这一推断。但是，除非能够取得送达记录或收货人的确认，否则结论仍应当表述为推断，而不是已经确认的事实。因此，运营团队可能需要联系收货人、取得送达确认，或者要求承运人开展更详细的搜索。
+
+海关异常也需要采取类似方法。如果海关发现申报原产国与支持性商业文件之间存在不一致，货件可能会被扣留，直到提供更正后的文件。重要任务是准确判断哪些信息不一致，以及哪一份文件能够解决该差异。与其只是要求某个人“处理清关问题”，更有效的信息应当说明海关发现了什么、需要什么文件，以及应由谁取得或提供该文件。
+
+同样的原则也适用于账单和送达调查：把已确认事实与假设分开，识别缺少的证据，并明确分配下一步行动。这样做不仅能提高沟通效率，还能在案件之后需要由其他团队复核时，形成更完整的审计轨迹。
+
+### 语法解析
+- `When a shipment exception is reported` 是时间状语从句，使用被动语态。
+- `shown in a tracking system` 是过去分词短语，修饰 `status`。
+- `enough information to determine...` 中，`to determine` 是不定式后置修饰 `information`，表示信息的用途。
+- `what has actually happened` 是 `determine` 的宾语从句。
+- 四个 `because` 分句并列，分别列出货运停止扫描的可能原因。
+- `distinguish between what...and what...` 中，两个 `what` 都引导名词性从句，分别作为 `between` 的两个宾语。
+- `Consider a shipment containing...` 中，`containing` 是现在分词，修饰 `shipment`。
+- `If most packages show...while one package has...` 中，`if` 引导条件从句，`while` 表示对比。
+- `it may be tempting to assume that...` 中，`it` 是形式主语，真正内容由不定式 `to assume` 表达；`that` 引导 `assume` 的宾语从句。
+- `unless...is available` 表示“除非……”，相当于 `if...not`。
+- `as an inference rather than as a confirmed fact` 是 `A rather than B` 对比结构。
+- `between the declared country of origin and...` 是固定结构 `between A and B`。
+- `until corrected documentation is provided` 是时间状语从句，`corrected` 是过去分词作定语，`is provided` 是被动谓语。
+- `which information...and which document...` 是两个并列宾语从句。
+- `Instead of simply asking...` 是介词短语，表示被替代的做法；`asking` 是动名词。
+- `what customs found, what document is required, and who is expected...` 是三个并列宾语从句。
+- `Doing so` 是动名词短语作主语；`not only...but also...` 连接两个并列谓语 `makes` 和 `creates`。
+
+---
+
+# 答案使用方法
+
+1. 先在前半部分独立完成分析，不要立即看答案。
+2. 对照答案时，用不同颜色标出自己遗漏的谓语、从句和非谓语。
+3. 对原文不规范的第1、2、5组，重点学习“推荐改写”，不要机械模仿原句。
+4. 对三篇短文，建议先按段落复述中文逻辑，再遮住原文进行英文复述。
+5. 每次只精读2至3组，最后用相关表达写一封与你当前工作有关的短邮件。
